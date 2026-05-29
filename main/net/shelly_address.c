@@ -70,10 +70,10 @@ bool fishduino_shelly_address_error(const char *addr, bool allow_empty, char *bu
     }
 
     if (is_empty(addr)) {
-        snprintf(buf, len, "IP required when plug is enabled");
+        snprintf(buf, len, "IP required when enabled");
         return true;
     }
 
-    snprintf(buf, len, "Invalid address (use IPv4 or hostname)");
+    snprintf(buf, len, "Invalid IPv4 or hostname");
     return true;
 }

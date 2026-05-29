@@ -22,9 +22,18 @@
 
 static const char *TAG = "shelly_client";
 
-#define HTTP_BUF_SIZE 1024
+#define HTTP_BUF_SIZE 2048
 
 static bool s_logged_filter_energy;
+
+static void error_text_set(fishduino_shelly_switch_status_t *out, const char *msg)
+{
+    if (out == NULL || msg == NULL) {
+        return;
+    }
+    snprintf(out->error_text, sizeof(out->error_text), "%s", msg);
+    out->error_text[sizeof(out->error_text) - 1] = '\0';
+}
 
 static float json_get_float(const cJSON *obj, const char *key, float def)
 {
@@ -54,6 +63,21 @@ static bool json_has_switch_fields(const cJSON *root)
     return false;
 }
 
+static void parse_temperature(const cJSON *root, fishduino_shelly_switch_status_t *out)
+{
+    const cJSON *temp = cJSON_GetObjectItemCaseSensitive(root, "temperature");
+    if (cJSON_IsObject(temp)) {
+        const cJSON *tc = cJSON_GetObjectItemCaseSensitive(temp, "tC");
+        if (cJSON_IsNumber(tc)) {
+            float t_c = (float)tc->valuedouble;
+            out->temperature_f = t_c * 9.0f / 5.0f + 32.0f;
+        }
+    } else if (cJSON_IsNumber(temp)) {
+        float t_c = (float)temp->valuedouble;
+        out->temperature_f = t_c * 9.0f / 5.0f + 32.0f;
+    }
+}
+
 static bool parse_switch_json(const char *body, fishduino_shelly_switch_status_t *out)
 {
     cJSON *root = cJSON_Parse(body);
@@ -67,6 +91,7 @@ static bool parse_switch_json(const char *body, fishduino_shelly_switch_status_t
         if (cJSON_IsNumber(code) && cJSON_IsString(message) && message->valuestring != NULL) {
             snprintf(out->error_text, sizeof(out->error_text), "RPC %d: %s", code->valueint,
                      message->valuestring);
+            out->error_text[sizeof(out->error_text) - 1] = '\0';
         }
         cJSON_Delete(root);
         return false;
@@ -84,22 +109,14 @@ static bool parse_switch_json(const char *body, fishduino_shelly_switch_status_t
         out->energy_wh = json_get_float(aenergy, "total", out->energy_wh);
     }
 
-    const cJSON *temp = cJSON_GetObjectItemCaseSensitive(root, "temperature");
-    if (cJSON_IsObject(temp)) {
-        float t_c = json_get_float(temp, "tC", 0.0f);
-        if (t_c != 0.0f) {
-            out->temperature_f = t_c * 9.0f / 5.0f + 32.0f;
-        }
-    } else if (cJSON_IsNumber(temp)) {
-        float t_c = (float)temp->valuedouble;
-        out->temperature_f = t_c * 9.0f / 5.0f + 32.0f;
-    }
+    parse_temperature(root, out);
 
     const cJSON *errors = cJSON_GetObjectItemCaseSensitive(root, "errors");
     if (cJSON_IsArray(errors) && cJSON_GetArraySize(errors) > 0) {
         const cJSON *e0 = cJSON_GetArrayItem(errors, 0);
         if (cJSON_IsString(e0) && e0->valuestring != NULL) {
             strncpy(out->error_text, e0->valuestring, sizeof(out->error_text) - 1);
+            out->error_text[sizeof(out->error_text) - 1] = '\0';
         }
     }
 
@@ -107,13 +124,19 @@ static bool parse_switch_json(const char *body, fishduino_shelly_switch_status_t
     return true;
 }
 
+typedef struct {
+    char body[HTTP_BUF_SIZE];
+    bool truncated;
+} http_body_ctx_t;
+
 static esp_err_t http_event(esp_http_client_event_t *evt)
 {
     if (evt->event_id != HTTP_EVENT_ON_DATA || evt->user_data == NULL) {
         return ESP_OK;
     }
 
-    char *buf = (char *)evt->user_data;
+    http_body_ctx_t *ctx = (http_body_ctx_t *)evt->user_data;
+    char *buf = ctx->body;
     size_t cap = HTTP_BUF_SIZE - 1;
     size_t cur = strnlen(buf, cap);
     if (cur >= cap || evt->data_len == 0) {
@@ -123,6 +146,7 @@ static esp_err_t http_event(esp_http_client_event_t *evt)
     size_t copy = evt->data_len;
     if (cur + copy > cap) {
         copy = cap - cur;
+        ctx->truncated = true;
     }
     memcpy(buf + cur, evt->data, copy);
     buf[cur + copy] = '\0';
@@ -131,6 +155,7 @@ static esp_err_t http_event(esp_http_client_event_t *evt)
 
 typedef struct {
     char body[HTTP_BUF_SIZE];
+    bool truncated;
     int status_code;
     bool ok;
 } http_result_t;
@@ -138,15 +163,18 @@ typedef struct {
 static bool http_get(const char *url, http_result_t *result)
 {
     result->body[0] = '\0';
+    result->truncated = false;
     result->status_code = 0;
     result->ok = false;
+
+    http_body_ctx_t body_ctx = {0};
 
     esp_http_client_config_t cfg = {
         .url = url,
         .method = HTTP_METHOD_GET,
         .timeout_ms = FISHDUINO_SHELLY_HTTP_TIMEOUT_MS,
         .event_handler = http_event,
-        .user_data = result->body,
+        .user_data = &body_ctx,
         .buffer_size = 512,
         .buffer_size_tx = 512,
     };
@@ -160,8 +188,16 @@ static bool http_get(const char *url, http_result_t *result)
     result->status_code = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
 
+    memcpy(result->body, body_ctx.body, sizeof(result->body));
+    result->body[sizeof(result->body) - 1] = '\0';
+    result->truncated = body_ctx.truncated;
+
+    if (result->truncated) {
+        ESP_LOGW(TAG, "HTTP response truncated (buffer %d bytes): %s", HTTP_BUF_SIZE, url);
+    }
+
     result->ok = (err == ESP_OK && result->status_code >= 200 && result->status_code < 300 &&
-                  result->body[0] != '\0');
+                  result->body[0] != '\0' && !result->truncated);
     return result->ok;
 }
 
@@ -183,7 +219,7 @@ static void mark_success(fishduino_shelly_switch_status_t *out)
 static void handle_http_error(int status, fishduino_shelly_switch_status_t *out)
 {
     if (status == 401) {
-        strncpy(out->error_text, "HTTP 401 auth required", sizeof(out->error_text) - 1);
+        error_text_set(out, "HTTP 401 auth required");
         ESP_LOGW(TAG, "Shelly returned 401 — disable LAN authentication on the plug");
     }
 }
@@ -199,7 +235,7 @@ bool fishduino_shelly_get_switch_status(const char *ip, int switch_id, fishduino
 
     http_result_t hr;
     if (!http_get(url, &hr)) {
-        ESP_LOGW(TAG, "GET failed: %s status=%d", url, hr.status_code);
+        ESP_LOGW(TAG, "GET failed: %s status=%d truncated=%d", url, hr.status_code, (int)hr.truncated);
         handle_http_error(hr.status_code, out);
         mark_failure(out);
         return false;

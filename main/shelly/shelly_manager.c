@@ -145,57 +145,72 @@ static void mark_failure_placeholder(fishduino_shelly_switch_status_t *status)
     }
 }
 
-static void poll_plug(const fishduino_shelly_plug_settings_t *plug, fishduino_shelly_switch_status_t *status,
-                      bool is_filter)
+/** HTTP poll only — no access to s_state (caller must hold status seeded from prior snapshot). */
+static bool poll_plug_http(const fishduino_shelly_plug_settings_t *plug, fishduino_shelly_switch_status_t *status)
 {
     if (!plug->enabled || plug->ip[0] == '\0') {
         status->online = false;
-        return;
+        return false;
     }
 
     if (!fishduino_wifi_is_connected()) {
         mark_failure_placeholder(status);
-        if (is_filter) {
-            update_filter_last_known_age();
-        }
-        return;
+        return false;
     }
 
-    if (fishduino_shelly_get_switch_status(plug->ip, plug->switch_id, status) && is_filter) {
+    return fishduino_shelly_get_switch_status(plug->ip, plug->switch_id, status);
+}
+
+/** Caller must hold state_lock. */
+static void apply_filter_status_locked(const fishduino_shelly_switch_status_t *tmp, bool poll_ok)
+{
+    s_state.filter_status = *tmp;
+    if (poll_ok && tmp->online) {
         snapshot_filter_last_known();
-    } else if (is_filter && !status->online) {
+    } else if (!tmp->online) {
         update_filter_last_known_age();
     }
 }
 
-static bool co2_set_allowed_interval(const fishduino_settings_t *settings)
+static bool co2_set_allowed_interval_ms(uint32_t last_co2_command_ms, const fishduino_settings_t *settings)
 {
     uint32_t interval_ms = (uint32_t)settings->co2_command_min_interval_s * 1000U;
     if (interval_ms < FISHDUINO_SHELLY_CO2_CMD_MIN_MS) {
         interval_ms = FISHDUINO_SHELLY_CO2_CMD_MIN_MS;
     }
     uint32_t t = now_ms();
-    if (s_state.last_co2_command_ms != 0 && (t - s_state.last_co2_command_ms) < interval_ms) {
+    if (last_co2_command_ms != 0 && (t - last_co2_command_ms) < interval_ms) {
         return false;
     }
     return true;
 }
 
-static void execute_co2_set(const fishduino_settings_t *settings, bool on)
+/** HTTP outside state mutex. */
+static bool execute_co2_set(const fishduino_settings_t *settings, bool on)
 {
     if (!settings->shelly_co2.enabled) {
-        return;
+        return false;
     }
 
-    if (!co2_set_allowed_interval(settings)) {
-        return;
+    uint32_t last_cmd_ms;
+    state_lock();
+    last_cmd_ms = s_state.last_co2_command_ms;
+    state_unlock();
+
+    if (!co2_set_allowed_interval_ms(last_cmd_ms, settings)) {
+        return false;
     }
 
-    if (fishduino_shelly_co2_set_output(settings, on)) {
-        s_state.co2_last_sent_on = on;
-        s_state.last_co2_command_ms = now_ms();
-        s_state.co2_status.output = on;
+    if (!fishduino_shelly_co2_set_output(settings, on)) {
+        return false;
     }
+
+    state_lock();
+    s_state.co2_last_sent_on = on;
+    s_state.last_co2_command_ms = now_ms();
+    s_state.co2_status.output = on;
+    state_unlock();
+    return true;
 }
 
 typedef struct {
@@ -251,8 +266,12 @@ static void filter_calibrate_tick(const fishduino_settings_t *settings)
         return;
     }
 
-    fishduino_shelly_switch_status_t tmp = {0};
-    poll_plug(&settings->shelly_filter, &tmp, false);
+    fishduino_shelly_switch_status_t tmp;
+    state_lock();
+    tmp = s_state.filter_status;
+    state_unlock();
+
+    poll_plug_http(&settings->shelly_filter, &tmp);
 
     state_lock();
     s_state.filter_status = tmp;
@@ -312,9 +331,7 @@ static void shelly_task(void *arg)
             if (cmd.type == SHELLY_CMD_CO2_SET) {
                 fishduino_settings_t co2_settings;
                 if (fishduino_settings_get_snapshot(&co2_settings)) {
-                    state_lock();
                     execute_co2_set(&co2_settings, cmd.on);
-                    state_unlock();
                 }
             } else if (cmd.type == SHELLY_CMD_FILTER_CALIBRATE) {
                 filter_calibrate_start(&settings);
@@ -329,15 +346,31 @@ static void shelly_task(void *arg)
         if ((t - last_poll) >= FISHDUINO_SHELLY_POLL_MS) {
             last_poll = t;
 
+            fishduino_shelly_switch_status_t co2_tmp;
+            fishduino_shelly_switch_status_t filter_tmp;
+            bool filter_ok = false;
+
+            state_lock();
+            co2_tmp = s_state.co2_status;
+            filter_tmp = s_state.filter_status;
+            state_unlock();
+
+            if (settings.shelly_co2.enabled) {
+                poll_plug_http(&settings.shelly_co2, &co2_tmp);
+            }
+            if (settings.shelly_filter.enabled && !s_cal_active) {
+                filter_ok = poll_plug_http(&settings.shelly_filter, &filter_tmp);
+            }
+
             state_lock();
             s_state.last_poll_ms = t;
 
             if (settings.shelly_co2.enabled) {
-                poll_plug(&settings.shelly_co2, &s_state.co2_status, false);
+                s_state.co2_status = co2_tmp;
             }
             if (settings.shelly_filter.enabled && !s_cal_active) {
                 bool was_off = !s_state.filter_status.output;
-                poll_plug(&settings.shelly_filter, &s_state.filter_status, true);
+                apply_filter_status_locked(&filter_tmp, filter_ok);
                 if (s_state.filter_status.output) {
                     s_state.last_filter_output_on_ms = t;
                     if (was_off) {
@@ -579,8 +612,16 @@ bool fishduino_shelly_poll_filter_now(void)
     if (!fishduino_settings_get_snapshot(&settings) || !settings.shelly_filter.enabled) {
         return false;
     }
+
+    fishduino_shelly_switch_status_t tmp;
     state_lock();
-    poll_plug(&settings.shelly_filter, &s_state.filter_status, true);
+    tmp = s_state.filter_status;
+    state_unlock();
+
+    bool ok = poll_plug_http(&settings.shelly_filter, &tmp);
+
+    state_lock();
+    apply_filter_status_locked(&tmp, ok);
     update_filter_alarm(&settings);
     state_unlock();
     return true;
