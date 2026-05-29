@@ -1,9 +1,12 @@
 #include "ui.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "co2/co2_gpio.h"
 #include "feeder/feeder_actuator.h"
+#include "net/wifi_manager.h"
+#include "screen_commissioning.h"
 #include "screen_dashboard.h"
 #include "screen_options.h"
 #include "shelly/shelly_manager.h"
@@ -36,6 +39,7 @@ void fishduino_ui_init(fishduino_ui_t *ui)
     ui->label_filter = h.label_filter;
     ui->label_filter_energy = h.label_filter_energy;
     ui->label_filter_alarm = h.label_filter_alarm;
+    ui->label_wifi = h.label_wifi;
 
     fishduino_screen_options_build(ui->root);
 
@@ -45,24 +49,39 @@ void fishduino_ui_init(fishduino_ui_t *ui)
 void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
                          const fishduino_feeder_t *feeder, const fishduino_settings_t *settings)
 {
-    const fishduino_shelly_state_t *ss = fishduino_shelly_manager_get_state();
-    char buf[128];
+    fishduino_shelly_state_t ss;
+    if (!fishduino_shelly_manager_get_state_snapshot(&ss)) {
+        return;
+    }
+
+    char buf[160];
     char age_s[24];
 
+    (void)co2;
     (void)feeder;
 
+    fishduino_screen_commissioning_tick();
+
+    if (ui->label_wifi) {
+        lv_label_set_text(ui->label_wifi, fishduino_wifi_status_text());
+    }
+
     if (ui->label_filter_alarm) {
-        if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_OFF && ss->alert_blink_on) {
+        if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_OFF && ss.alert_blink_on) {
             lv_label_set_text(ui->label_filter_alarm, "!!! FILTER IS OFF !!!");
             lv_obj_clear_flag(ui->label_filter_alarm, LV_OBJ_FLAG_HIDDEN);
-        } else if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_OFF) {
+        } else if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_OFF) {
             lv_label_set_text(ui->label_filter_alarm, "FILTER IS OFF");
             lv_obj_clear_flag(ui->label_filter_alarm, LV_OBJ_FLAG_HIDDEN);
-        } else if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_OFFLINE) {
+        } else if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_OFFLINE) {
             lv_label_set_text(ui->label_filter_alarm, "FILTER MONITOR OFFLINE");
             lv_obj_clear_flag(ui->label_filter_alarm, LV_OBJ_FLAG_HIDDEN);
-        } else if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_LOW_POWER) {
+        } else if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_LOW_POWER) {
             lv_label_set_text(ui->label_filter_alarm, "FILTER POWER LOW");
+            lv_obj_clear_flag(ui->label_filter_alarm, LV_OBJ_FLAG_HIDDEN);
+        } else if (ss.filter_calibrating) {
+            snprintf(buf, sizeof(buf), "Filter calibrating... %us/30s", (unsigned)ss.filter_calibrate_progress_s);
+            lv_label_set_text(ui->label_filter_alarm, buf);
             lv_obj_clear_flag(ui->label_filter_alarm, LV_OBJ_FLAG_HIDDEN);
         } else {
             lv_label_set_text(ui->label_filter_alarm, "");
@@ -74,14 +93,14 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
         if (settings->shelly_co2.enabled) {
             if (!settings->co2.enabled) {
                 snprintf(buf, sizeof(buf), "CO2: SCHEDULE DISABLED");
-            } else if (ss->co2_waiting_time) {
+            } else if (ss.co2_waiting_time) {
                 snprintf(buf, sizeof(buf), "CO2: waiting for time sync");
-            } else if (!ss->co2_status.online) {
+            } else if (!ss.co2_status.online) {
                 snprintf(buf, sizeof(buf), "CO2: OFFLINE");
-            } else if (ss->co2_manual_active) {
-                snprintf(buf, sizeof(buf), "CO2: %s (MANUAL)", ss->co2_status.output ? "ON" : "OFF");
+            } else if (ss.co2_manual_active) {
+                snprintf(buf, sizeof(buf), "CO2: %s (MANUAL)", ss.co2_status.output ? "ON" : "OFF");
             } else {
-                snprintf(buf, sizeof(buf), "CO2: %s", ss->co2_desired_on ? "ON" : "OFF");
+                snprintf(buf, sizeof(buf), "CO2: %s", ss.co2_desired_on ? "ON" : "OFF");
             }
         } else if (!fishduino_co2_gpio_is_configured()) {
             snprintf(buf, sizeof(buf), "CO2: GPIO not configured");
@@ -95,10 +114,13 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
         char on_s[8], off_s[8];
         format_minutes(settings->co2.on_min, on_s, sizeof(on_s));
         format_minutes(settings->co2.off_min, off_s, sizeof(off_s));
+        const char *midnight = (settings->co2.on_min > settings->co2.off_min) ? " crosses midnight" : "";
         if (!settings->co2.enabled) {
-            snprintf(buf, sizeof(buf), "Sched: %s-%s (off)  %.1f W", on_s, off_s, (double)ss->co2_status.watts);
+            snprintf(buf, sizeof(buf), "Sched: %s-%s (off)%s  %.1f W", on_s, off_s, midnight,
+                     (double)ss.co2_status.watts);
         } else {
-            snprintf(buf, sizeof(buf), "CO2 W: %.1f  Sched: %s-%s", (double)ss->co2_status.watts, on_s, off_s);
+            snprintf(buf, sizeof(buf), "CO2 W: %.1f  Sched: %s-%s%s", (double)ss.co2_status.watts, on_s, off_s,
+                     midnight);
         }
         lv_label_set_text(ui->label_co2_detail, buf);
     } else if (ui->label_co2_detail) {
@@ -106,18 +128,24 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
     }
 
     if (ui->label_filter && settings->shelly_filter.enabled) {
-        if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_OFFLINE) {
-            format_age_s(ss->filter_last_known_age_ms, age_s, sizeof(age_s));
+        if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_OFFLINE) {
+            format_age_s(ss.filter_last_known_age_ms, age_s, sizeof(age_s));
             snprintf(buf, sizeof(buf), "Filter: OFFLINE (last: %.1f W, %s)",
-                     (double)ss->filter_last_known.watts, age_s);
+                     (double)ss.filter_last_known.watts, age_s);
         } else {
             const char *state = "RUNNING";
-            if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_OFF) {
+            if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_OFF) {
                 state = "OFF";
-            } else if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_LOW_POWER) {
+            } else if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_LOW_POWER) {
                 state = "LOW POWER";
             }
-            snprintf(buf, sizeof(buf), "Filter: %s  %.1f W", state, (double)ss->filter_status.watts);
+            snprintf(buf, sizeof(buf), "Filter: %s  %.1f W", state, (double)ss.filter_status.watts);
+        }
+        if (settings->filter_baseline_watts > 0.0f) {
+            char extra[64];
+            snprintf(extra, sizeof(extra), " | base %.0fW thr %.0fW", (double)settings->filter_baseline_watts,
+                     (double)settings->filter_running_watts_threshold);
+            strncat(buf, extra, sizeof(buf) - strlen(buf) - 1);
         }
         lv_label_set_text(ui->label_filter, buf);
     } else if (ui->label_filter) {
@@ -125,16 +153,16 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
     }
 
     if (ui->label_filter_energy && settings->shelly_filter.enabled &&
-        ss->filter_alarm != FISHDUINO_FILTER_ALARM_OFF) {
-        if (ss->filter_alarm == FISHDUINO_FILTER_ALARM_OFFLINE &&
-            ss->filter_last_known.last_success_ms != 0) {
-            format_age_s(ss->filter_last_known_age_ms, age_s, sizeof(age_s));
+        ss.filter_alarm != FISHDUINO_FILTER_ALARM_OFF) {
+        if (ss.filter_alarm == FISHDUINO_FILTER_ALARM_OFFLINE &&
+            ss.filter_last_known.last_success_ms != 0) {
+            format_age_s(ss.filter_last_known_age_ms, age_s, sizeof(age_s));
             snprintf(buf, sizeof(buf), "Last: out=%s %.1fW %s  Alarm: OFFLINE",
-                     ss->filter_last_known.output ? "on" : "off", (double)ss->filter_last_known.watts, age_s);
+                     ss.filter_last_known.output ? "on" : "off", (double)ss.filter_last_known.watts, age_s);
         } else {
             snprintf(buf, sizeof(buf), "Filter kWh: %.2f  Alarm: %s",
-                     (double)(ss->filter_status.energy_wh / 1000.0f),
-                     fishduino_filter_alarm_text(ss->filter_alarm));
+                     (double)(ss.filter_status.energy_wh / 1000.0f),
+                     fishduino_filter_alarm_text(ss.filter_alarm));
         }
         lv_label_set_text(ui->label_filter_energy, buf);
     } else if (ui->label_filter_energy) {

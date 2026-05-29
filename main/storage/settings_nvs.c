@@ -10,6 +10,19 @@
 static const char *TAG = "settings";
 static const char *NVS_NAMESPACE = "fishduino";
 static const char *NVS_KEY_SETTINGS_V2 = "settings_v2";
+static const char *NVS_KEY_SETTINGS_V3 = "settings_v3";
+
+/** Layout before filter_baseline_watts was added. */
+typedef struct {
+    fishduino_co2_settings_t co2;
+    fishduino_feeder_settings_t feeder;
+    fishduino_shelly_plug_settings_t shelly_co2;
+    fishduino_shelly_plug_settings_t shelly_filter;
+    float filter_running_watts_threshold;
+    uint16_t filter_low_power_alarm_delay_s;
+    uint16_t co2_command_min_interval_s;
+    fishduino_timezone_t timezone;
+} fishduino_settings_v2_t;
 
 static void shelly_plug_defaults(fishduino_shelly_plug_settings_t *plug, const char *ip)
 {
@@ -37,6 +50,7 @@ void fishduino_settings_defaults(fishduino_settings_t *out)
     shelly_plug_defaults(&out->shelly_filter, FISHDUINO_FILTER_SHELLY_IP_DEFAULT);
 
     out->filter_running_watts_threshold = 5.0f;
+    out->filter_baseline_watts = 0.0f;
     out->filter_low_power_alarm_delay_s = 60;
     out->co2_command_min_interval_s = 10;
     out->timezone = FISHDUINO_TZ_US_CENTRAL;
@@ -69,6 +83,20 @@ static esp_err_t ensure_nvs_ready(void)
     return err;
 }
 
+static void copy_v2_to_v3(const fishduino_settings_v2_t *v2, fishduino_settings_t *out)
+{
+    fishduino_settings_defaults(out);
+    out->co2 = v2->co2;
+    out->feeder = v2->feeder;
+    out->shelly_co2 = v2->shelly_co2;
+    out->shelly_filter = v2->shelly_filter;
+    out->filter_running_watts_threshold = v2->filter_running_watts_threshold;
+    out->filter_low_power_alarm_delay_s = v2->filter_low_power_alarm_delay_s;
+    out->co2_command_min_interval_s = v2->co2_command_min_interval_s;
+    out->timezone = v2->timezone;
+    out->filter_baseline_watts = 0.0f;
+}
+
 bool fishduino_settings_load(fishduino_settings_t *out)
 {
     fishduino_settings_defaults(out);
@@ -87,15 +115,27 @@ bool fishduino_settings_load(fishduino_settings_t *out)
     }
 
     size_t size = sizeof(*out);
-    err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V2, out, &size);
-    nvs_close(nvh);
-    if (err != ESP_OK || size != sizeof(*out)) {
-        ESP_LOGW(TAG, "Settings v2 missing or wrong size (%u): %s", (unsigned)size, esp_err_to_name(err));
-        fishduino_settings_defaults(out);
-        return false;
+    err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V3, out, &size);
+    if (err == ESP_OK && size == sizeof(*out)) {
+        nvs_close(nvh);
+        return true;
     }
 
-    return true;
+    fishduino_settings_v2_t v2 = {0};
+    size = sizeof(v2);
+    err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V2, &v2, &size);
+    nvs_close(nvh);
+
+    if (err == ESP_OK && size == sizeof(v2)) {
+        ESP_LOGI(TAG, "Migrating settings v2 -> v3");
+        copy_v2_to_v3(&v2, out);
+        fishduino_settings_save(out);
+        return true;
+    }
+
+    ESP_LOGW(TAG, "Settings missing or wrong size: %s", esp_err_to_name(err));
+    fishduino_settings_defaults(out);
+    return false;
 }
 
 bool fishduino_settings_save(const fishduino_settings_t *in)
@@ -113,7 +153,7 @@ bool fishduino_settings_save(const fishduino_settings_t *in)
         return false;
     }
 
-    err = nvs_set_blob(nvh, NVS_KEY_SETTINGS_V2, in, sizeof(*in));
+    err = nvs_set_blob(nvh, NVS_KEY_SETTINGS_V3, in, sizeof(*in));
     if (err == ESP_OK) {
         err = nvs_commit(nvh);
     }

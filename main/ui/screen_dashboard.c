@@ -68,6 +68,11 @@ fishduino_dashboard_handles_t fishduino_screen_dashboard_build(lv_obj_t *parent)
     lv_label_set_text(h.label_feeder, "Feeder: --");
     lv_obj_align(h.label_feeder, LV_ALIGN_TOP_LEFT, 12, 198);
 
+    h.label_wifi = lv_label_create(parent);
+    lv_label_set_text(h.label_wifi, "Wi-Fi: --");
+    lv_obj_set_width(h.label_wifi, 440);
+    lv_obj_align(h.label_wifi, LV_ALIGN_TOP_LEFT, 12, 220);
+
     h.btn_co2_on = lv_btn_create(parent);
     lv_obj_set_size(h.btn_co2_on, 90, 36);
     lv_obj_align(h.btn_co2_on, LV_ALIGN_BOTTOM_LEFT, 12, -56);

@@ -18,12 +18,13 @@
 #include "co2/co2_gpio.h"
 #include "feeder/feeder_schedule.h"
 #include "feeder/feeder_actuator.h"
+#include "net/safety_console.h"
 #include "net/shelly_console.h"
 #include "net/time_sync.h"
 #include "net/wifi_manager.h"
 #include "scheduler/scheduler.h"
 #include "shelly/shelly_manager.h"
-#include "storage/settings_nvs.h"
+#include "storage/settings_runtime.h"
 #include "ui/ui.h"
 
 static const char *TAG = "fishduino";
@@ -88,8 +89,7 @@ static void scheduler_tick(const fishduino_time_snapshot_t *now, void *ctx)
 {
     fishduino_app_t *app = (fishduino_app_t *)ctx;
 
-    fishduino_settings_t *live = fishduino_shelly_manager_get_settings_mutable();
-    app->settings = *live;
+    fishduino_settings_get_snapshot(&app->settings);
     fishduino_co2_apply_settings(&app->co2, &app->settings);
     fishduino_co2_tick(&app->co2, now);
     fishduino_shelly_co2_tick(&app->co2, now);
@@ -112,16 +112,18 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "Fishduino starting");
 
-    fishduino_settings_load(&s_app.settings);
+    fishduino_settings_runtime_init();
+    fishduino_settings_get_snapshot(&s_app.settings);
     fishduino_time_sync_init();
     fishduino_time_sync_apply_timezone(&s_app.settings);
 
     fishduino_co2_init(&s_app.co2, &s_app.settings);
     fishduino_feeder_init(&s_app.feeder, &s_app.settings);
-    fishduino_shelly_manager_init(&s_app.settings);
+    fishduino_shelly_manager_init();
 
     console_init();
     fishduino_shelly_console_register();
+    fishduino_safety_console_register();
     xTaskCreate(repl_task, "console", 4096, NULL, 3, NULL);
 
     ESP_LOGI(TAG, "Init display + touch + LVGL (BSP)");

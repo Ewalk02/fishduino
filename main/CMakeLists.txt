@@ -1,6 +1,7 @@
 idf_component_register(SRCS
   "main.c"
   "storage/settings_nvs.c"
+  "storage/settings_runtime.c"
   "storage/wifi_creds_nvs.c"
   "scheduler/scheduler.c"
   "co2/co2_schedule.c"
@@ -11,17 +12,22 @@ idf_component_register(SRCS
   "net/time_sync.c"
   "net/shelly_client.c"
   "net/shelly_console.c"
+  "net/safety_console.c"
   "shelly/shelly_manager.c"
   "ui/ui.c"
   "ui/screen_dashboard.c"
   "ui/screen_options.c"
   "ui/screen_wifi_settings.c"
+  "ui/screen_shelly_settings.c"
+  "ui/screen_co2_schedule.c"
+  "ui/screen_commissioning.c"
   INCLUDE_DIRS
   "."
   REQUIRES
   esp_wifi
   esp_netif
   esp_event
+  esp_timer
   esp_http_client
   json
   lwip

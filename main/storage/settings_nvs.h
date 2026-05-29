@@ -41,6 +41,7 @@ typedef struct {
     uint16_t filter_low_power_alarm_delay_s;
     uint16_t co2_command_min_interval_s;
     fishduino_timezone_t timezone;
+    float filter_baseline_watts; /**< 0 = uncalibrated */
 } fishduino_settings_t;
 
 const char *fishduino_timezone_name(fishduino_timezone_t tz);

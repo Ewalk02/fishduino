@@ -13,6 +13,7 @@ typedef struct {
     lv_obj_t *label_filter;
     lv_obj_t *label_filter_energy;
     lv_obj_t *label_filter_alarm;
+    lv_obj_t *label_wifi;
 } fishduino_ui_t;
 
 void fishduino_ui_init(fishduino_ui_t *ui);

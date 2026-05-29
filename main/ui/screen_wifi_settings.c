@@ -149,7 +149,14 @@ void fishduino_screen_wifi_show(void)
     lv_textarea_set_text(s_ta_password, password);
 
     if (s_label_status != NULL) {
-        lv_label_set_text(s_label_status, fishduino_wifi_status_text());
+        fishduino_wifi_status_t wst;
+        fishduino_wifi_get_status(&wst);
+        char buf[160];
+        snprintf(buf, sizeof(buf), "%s", fishduino_wifi_status_text());
+        if (wst.kind == FISHDUINO_WIFI_STATUS_DISCONNECTED && wst.reason_text[0] != '\0') {
+            snprintf(buf, sizeof(buf), "%s\nReason: %s", fishduino_wifi_status_text(), wst.reason_text);
+        }
+        lv_label_set_text(s_label_status, buf);
     }
 
     lv_obj_clear_flag(s_wifi_screen, LV_OBJ_FLAG_HIDDEN);
