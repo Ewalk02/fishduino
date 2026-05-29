@@ -57,6 +57,15 @@ const char *fishduino_wifi_status_text(void)
     return "Wi-Fi unavailable";
 }
 
+bool fishduino_wifi_get_sta_ip(char *buf, size_t len)
+{
+    if (buf != NULL && len > 0) {
+        strncpy(buf, "unavailable", len - 1);
+        buf[len - 1] = '\0';
+    }
+    return false;
+}
+
 #else
 
 #include "esp_event.h"
@@ -468,6 +477,36 @@ const char *fishduino_wifi_status_text(void)
     default:
         return "Wi-Fi unavailable";
     }
+}
+
+bool fishduino_wifi_get_sta_ip(char *buf, size_t len)
+{
+    if (buf == NULL || len == 0) {
+        return false;
+    }
+
+    if (!fishduino_wifi_is_connected()) {
+        strncpy(buf, "not connected", len - 1);
+        buf[len - 1] = '\0';
+        return false;
+    }
+
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif == NULL) {
+        strncpy(buf, "no netif", len - 1);
+        buf[len - 1] = '\0';
+        return false;
+    }
+
+    esp_netif_ip_info_t info;
+    if (esp_netif_get_ip_info(netif, &info) != ESP_OK || info.ip.addr == 0) {
+        strncpy(buf, "no IP", len - 1);
+        buf[len - 1] = '\0';
+        return false;
+    }
+
+    snprintf(buf, len, IPSTR, IP2STR(&info.ip));
+    return true;
 }
 
 #endif

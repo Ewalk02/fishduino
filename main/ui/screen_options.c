@@ -4,6 +4,7 @@
 
 #include "screen_co2_schedule.h"
 #include "screen_commissioning.h"
+#include "screen_diagnostics.h"
 #include "screen_shelly_settings.h"
 #include "screen_wifi_settings.h"
 #include "shelly/shelly_manager.h"
@@ -18,7 +19,7 @@ static bool is_overlay(lv_obj_t *child)
 {
     return child == s_options_screen || child == fishduino_screen_wifi_root() ||
            child == fishduino_screen_shelly_root() || child == fishduino_screen_co2_schedule_root() ||
-           child == fishduino_screen_commissioning_root();
+           child == fishduino_screen_commissioning_root() || child == fishduino_screen_diagnostics_root();
 }
 
 static void set_dashboard_visible(bool visible)
@@ -46,6 +47,7 @@ static void hide_all_overlays(void)
     fishduino_screen_shelly_hide();
     fishduino_screen_co2_schedule_hide();
     fishduino_screen_commissioning_hide();
+    fishduino_screen_diagnostics_hide();
 }
 
 static void hide_options(void)
@@ -103,6 +105,12 @@ static void btn_safety_cb(lv_event_t *e)
 {
     (void)e;
     fishduino_screen_commissioning_show();
+}
+
+static void btn_diagnostics_cb(lv_event_t *e)
+{
+    (void)e;
+    fishduino_screen_diagnostics_show();
 }
 
 static void btn_filter_cal_cb(lv_event_t *e)
@@ -200,9 +208,15 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     lv_label_set_text(lv_label_create(btn_cal), "Filter Calibrate");
     lv_obj_add_event_cb(btn_cal, btn_filter_cal_cb, LV_EVENT_CLICKED, NULL);
 
+    lv_obj_t *btn_diag = lv_btn_create(h.screen);
+    lv_obj_set_size(btn_diag, 200, 32);
+    lv_obj_align(btn_diag, LV_ALIGN_TOP_LEFT, 8, 208);
+    lv_label_set_text(lv_label_create(btn_diag), "Diagnostics");
+    lv_obj_add_event_cb(btn_diag, btn_diagnostics_cb, LV_EVENT_CLICKED, NULL);
+
     lv_obj_t *tz_lbl = lv_label_create(h.screen);
     lv_label_set_text(tz_lbl, "Timezone:");
-    lv_obj_align(tz_lbl, LV_ALIGN_TOP_LEFT, 8, 212);
+    lv_obj_align(tz_lbl, LV_ALIGN_TOP_LEFT, 8, 248);
 
     const struct {
         const char *name;
@@ -217,7 +231,7 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     for (int i = 0; i < 4; i++) {
         lv_obj_t *btn = lv_btn_create(h.screen);
         lv_obj_set_size(btn, 100, 28);
-        lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 8 + (i % 2) * 108, 232 + (i / 2) * 32);
+        lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 8 + (i % 2) * 108, 268 + (i / 2) * 32);
         lv_label_set_text(lv_label_create(btn), zones[i].name);
         lv_obj_add_event_cb(btn, set_tz_cb, LV_EVENT_CLICKED, (void *)(intptr_t)zones[i].tz);
     }
@@ -232,6 +246,7 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     fishduino_screen_shelly_build(parent);
     fishduino_screen_co2_schedule_build(parent);
     fishduino_screen_commissioning_build(parent);
+    fishduino_screen_diagnostics_build(parent);
 
     return h;
 }

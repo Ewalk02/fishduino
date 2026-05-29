@@ -97,7 +97,7 @@ Before connecting a CO2 solenoid or filter pump:
 
 1. Plug **test lamps** into the CO2 and filter Shelly outlets (same wattage class as your loads is ideal).
 2. Configure Wi-Fi and Shelly IPs (above).
-3. Run **OPTIONS → Safety Test** on the touchscreen, or serial `safety_test` in the monitor.
+3. Run **OPTIONS → Safety Test** on the touchscreen, or serial `safety_test` in the monitor. Use **OPTIONS → Diagnostics** or serial `status` to verify active settings.
 4. Complete all 7 steps:
    - CO2 lamp ON / OFF
    - CO2 AUTO schedule behavior
@@ -130,6 +130,7 @@ Read-only: Fishduino never sends `Switch.Set` to the filter plug. Low-power alar
 | `co2_schedule on` / `off` / `status` | CO2 schedule enable |
 | `co2_schedule times 09:00 17:00` | Set ON/OFF times |
 | `filter_calibrate` | 30 s watt baseline (filter lamp on) |
+| `status` | Active Wi-Fi, device IP, Shelly, CO2 schedule, filter calibration |
 | `safety_test` | Commissioning checklist |
 
 Touch **CO2 ON / OFF / AUTO** on the dashboard for manual override.

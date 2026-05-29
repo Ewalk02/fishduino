@@ -11,8 +11,10 @@ idf_component_register(SRCS
   "net/wifi_manager.c"
   "net/time_sync.c"
   "net/shelly_client.c"
+  "net/shelly_address.c"
   "net/shelly_console.c"
   "net/safety_console.c"
+  "net/status_console.c"
   "shelly/shelly_manager.c"
   "ui/ui.c"
   "ui/screen_dashboard.c"
@@ -21,6 +23,7 @@ idf_component_register(SRCS
   "ui/screen_shelly_settings.c"
   "ui/screen_co2_schedule.c"
   "ui/screen_commissioning.c"
+  "ui/screen_diagnostics.c"
   INCLUDE_DIRS
   "."
   REQUIRES

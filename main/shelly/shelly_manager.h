@@ -41,9 +41,6 @@ void fishduino_shelly_manager_init(void);
 /** Thread-safe copy of Shelly manager state. */
 bool fishduino_shelly_manager_get_state_snapshot(fishduino_shelly_state_t *out);
 
-/** @deprecated Use fishduino_shelly_manager_get_state_snapshot. */
-const fishduino_shelly_state_t *fishduino_shelly_manager_get_state(void);
-
 void fishduino_shelly_co2_tick(fishduino_co2_t *co2, const fishduino_time_snapshot_t *now);
 void fishduino_shelly_filter_alarm_tick(void);
 

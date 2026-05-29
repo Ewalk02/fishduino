@@ -1,0 +1,79 @@
+#include "shelly_address.h"
+
+#include <ctype.h>
+#include <stdio.h>
+#include <string.h>
+
+static bool is_empty(const char *addr)
+{
+    return addr == NULL || addr[0] == '\0';
+}
+
+static bool ipv4_valid(const char *addr)
+{
+    unsigned a, b, c, d;
+    char tail = '\0';
+    if (sscanf(addr, "%u.%u.%u.%u%c", &a, &b, &c, &d, &tail) != 4) {
+        return false;
+    }
+    if (tail != '\0') {
+        return false;
+    }
+    return a <= 255 && b <= 255 && c <= 255 && d <= 255;
+}
+
+static bool hostname_valid(const char *addr)
+{
+    size_t n = strlen(addr);
+    if (n == 0 || n >= FISHDUINO_IP_LEN) {
+        return false;
+    }
+    if (addr[0] == '-' || addr[0] == '.' || addr[n - 1] == '-' || addr[n - 1] == '.') {
+        return false;
+    }
+
+    bool has_alnum = false;
+    for (size_t i = 0; i < n; i++) {
+        char ch = addr[i];
+        if (isalnum((unsigned char)ch)) {
+            has_alnum = true;
+            continue;
+        }
+        if (ch == '.' || ch == '-') {
+            continue;
+        }
+        return false;
+    }
+    return has_alnum;
+}
+
+bool fishduino_shelly_address_valid(const char *addr, bool allow_empty)
+{
+    if (is_empty(addr)) {
+        return allow_empty;
+    }
+    if (ipv4_valid(addr)) {
+        return true;
+    }
+    return hostname_valid(addr);
+}
+
+bool fishduino_shelly_address_error(const char *addr, bool allow_empty, char *buf, size_t len)
+{
+    if (buf == NULL || len == 0) {
+        return !fishduino_shelly_address_valid(addr, allow_empty);
+    }
+
+    if (fishduino_shelly_address_valid(addr, allow_empty)) {
+        buf[0] = '\0';
+        return false;
+    }
+
+    if (is_empty(addr)) {
+        snprintf(buf, len, "IP required when plug is enabled");
+        return true;
+    }
+
+    snprintf(buf, len, "Invalid address (use IPv4 or hostname)");
+    return true;
+}

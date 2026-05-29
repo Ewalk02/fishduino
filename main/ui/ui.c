@@ -7,6 +7,7 @@
 #include "feeder/feeder_actuator.h"
 #include "net/wifi_manager.h"
 #include "screen_commissioning.h"
+#include "screen_diagnostics.h"
 #include "screen_dashboard.h"
 #include "screen_options.h"
 #include "shelly/shelly_manager.h"
@@ -61,6 +62,7 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
     (void)feeder;
 
     fishduino_screen_commissioning_tick();
+    fishduino_screen_diagnostics_refresh();
 
     if (ui->label_wifi) {
         lv_label_set_text(ui->label_wifi, fishduino_wifi_status_text());

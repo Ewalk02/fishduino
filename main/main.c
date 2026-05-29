@@ -19,6 +19,7 @@
 #include "feeder/feeder_schedule.h"
 #include "feeder/feeder_actuator.h"
 #include "net/safety_console.h"
+#include "net/status_console.h"
 #include "net/shelly_console.h"
 #include "net/time_sync.h"
 #include "net/wifi_manager.h"
@@ -124,6 +125,7 @@ void app_main(void)
     console_init();
     fishduino_shelly_console_register();
     fishduino_safety_console_register();
+    fishduino_status_console_register();
     xTaskCreate(repl_task, "console", 4096, NULL, 3, NULL);
 
     ESP_LOGI(TAG, "Init display + touch + LVGL (BSP)");

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "net/shelly_address.h"
 #include "storage/settings_nvs.h"
 #include "storage/settings_runtime.h"
 
@@ -31,15 +32,6 @@ static bool mutator_shelly_save(fishduino_settings_t *st, void *ctx)
     st->shelly_co2 = s->co2;
     st->shelly_filter = s->filter;
     return true;
-}
-
-static bool ip_valid(const char *ip)
-{
-    if (ip == NULL || ip[0] == '\0') {
-        return false;
-    }
-    size_t n = strlen(ip);
-    return n < FISHDUINO_IP_LEN;
 }
 
 static void switch_id_label(lv_obj_t *lbl, int8_t id)
@@ -115,9 +107,20 @@ static void btn_save_cb(lv_event_t *e)
 
     const char *co2_ip = lv_textarea_get_text(s_ta_co2_ip);
     const char *filter_ip = lv_textarea_get_text(s_ta_filter_ip);
+    bool co2_en = lv_obj_has_state(s_sw_co2_en, LV_STATE_CHECKED);
+    bool filter_en = lv_obj_has_state(s_sw_filter_en, LV_STATE_CHECKED);
 
-    if (!ip_valid(co2_ip) || !ip_valid(filter_ip)) {
-        lv_label_set_text(s_label_status, "Valid IP required for each plug");
+    char err[64];
+    if (fishduino_shelly_address_error(co2_ip, !co2_en, err, sizeof(err))) {
+        char msg[80];
+        snprintf(msg, sizeof(msg), "CO2: %s", err);
+        lv_label_set_text(s_label_status, msg);
+        return;
+    }
+    if (fishduino_shelly_address_error(filter_ip, !filter_en, err, sizeof(err))) {
+        char msg[80];
+        snprintf(msg, sizeof(msg), "Filter: %s", err);
+        lv_label_set_text(s_label_status, msg);
         return;
     }
 
@@ -129,15 +132,15 @@ static void btn_save_cb(lv_event_t *e)
     }
     save.co2 = cur.shelly_co2;
     save.filter = cur.shelly_filter;
-    strncpy(save.co2.ip, co2_ip, sizeof(save.co2.ip) - 1);
-    strncpy(save.filter.ip, filter_ip, sizeof(save.filter.ip) - 1);
-    save.co2.enabled = lv_obj_has_state(s_sw_co2_en, LV_STATE_CHECKED);
-    save.filter.enabled = lv_obj_has_state(s_sw_filter_en, LV_STATE_CHECKED);
+    strncpy(save.co2.ip, co2_ip != NULL ? co2_ip : "", sizeof(save.co2.ip) - 1);
+    strncpy(save.filter.ip, filter_ip != NULL ? filter_ip : "", sizeof(save.filter.ip) - 1);
+    save.co2.enabled = co2_en;
+    save.filter.enabled = filter_en;
     save.co2.switch_id = s_co2_switch_id;
     save.filter.switch_id = s_filter_switch_id;
 
     if (fishduino_settings_update(mutator_shelly_save, &save, true)) {
-        lv_label_set_text(s_label_status, "Saved to NVS");
+        lv_label_set_text(s_label_status, "Saved — active now (NVS)");
     } else {
         lv_label_set_text(s_label_status, "Save failed");
     }

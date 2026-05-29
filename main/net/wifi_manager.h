@@ -31,3 +31,6 @@ void fishduino_wifi_apply_credentials_async(const char *ssid, const char *passwo
 
 void fishduino_wifi_get_status(fishduino_wifi_status_t *out);
 const char *fishduino_wifi_status_text(void);
+
+/** STA IPv4 string e.g. "192.168.1.50", or "not connected". */
+bool fishduino_wifi_get_sta_ip(char *buf, size_t len);

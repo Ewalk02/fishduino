@@ -63,11 +63,6 @@ bool fishduino_shelly_manager_get_state_snapshot(fishduino_shelly_state_t *out)
     return true;
 }
 
-const fishduino_shelly_state_t *fishduino_shelly_manager_get_state(void)
-{
-    return &s_state;
-}
-
 static void snapshot_filter_last_known(void)
 {
     s_state.filter_last_known = s_state.filter_status;
@@ -209,6 +204,12 @@ typedef struct {
     uint32_t start_ms;
 } filter_cal_ctx_t;
 
+static bool s_cal_active;
+static uint32_t s_cal_start_ms;
+static filter_cal_ctx_t s_cal_acc;
+
+static const uint32_t FILTER_CAL_DURATION_MS = 30000;
+
 static bool mutator_filter_calibrate(fishduino_settings_t *st, void *ctx)
 {
     filter_cal_ctx_t *c = (filter_cal_ctx_t *)ctx;
@@ -226,64 +227,71 @@ static bool mutator_filter_calibrate(fishduino_settings_t *st, void *ctx)
     return true;
 }
 
-static void run_filter_calibrate(const fishduino_settings_t *settings)
+static void filter_calibrate_start(const fishduino_settings_t *settings)
 {
     if (!settings->shelly_filter.enabled) {
         ESP_LOGW(TAG, "Filter calibrate: filter plug disabled");
         return;
     }
+    memset(&s_cal_acc, 0, sizeof(s_cal_acc));
+    s_cal_start_ms = now_ms();
+    s_cal_active = true;
 
     state_lock();
     s_state.filter_calibrating = true;
     s_state.filter_calibrate_progress_s = 0;
     state_unlock();
 
-    filter_cal_ctx_t cal = {0};
-    uint32_t start = now_ms();
-    const uint32_t duration_ms = 30000;
+    ESP_LOGI(TAG, "Filter calibration started (non-blocking)");
+}
 
-    while ((now_ms() - start) < duration_ms) {
-        fishduino_settings_t snap;
-        if (!fishduino_settings_get_snapshot(&snap)) {
-            break;
-        }
-
-        poll_plug(&snap.shelly_filter, &s_state.filter_status, true);
-
-        state_lock();
-        if (s_state.filter_status.online && s_state.filter_status.output &&
-            s_state.filter_status.watts >= 0.0f) {
-            cal.sum_watts += s_state.filter_status.watts;
-            cal.sample_count++;
-        }
-        uint8_t prog = (uint8_t)((now_ms() - start) / 1000U);
-        if (prog > 30) {
-            prog = 30;
-        }
-        s_state.filter_calibrate_progress_s = prog;
-        state_unlock();
-
-        vTaskDelay(pdMS_TO_TICKS(FISHDUINO_SHELLY_POLL_MS));
+static void filter_calibrate_tick(const fishduino_settings_t *settings)
+{
+    if (!s_cal_active) {
+        return;
     }
 
+    fishduino_shelly_switch_status_t tmp = {0};
+    poll_plug(&settings->shelly_filter, &tmp, false);
+
+    state_lock();
+    s_state.filter_status = tmp;
+
+    if (tmp.online && tmp.output && tmp.watts >= 0.0f) {
+        s_cal_acc.sum_watts += tmp.watts;
+        s_cal_acc.sample_count++;
+    }
+
+    uint32_t elapsed = now_ms() - s_cal_start_ms;
+    uint8_t prog = (uint8_t)(elapsed / 1000U);
+    if (prog > 30) {
+        prog = 30;
+    }
+    s_state.filter_calibrate_progress_s = prog;
+    state_unlock();
+
+    if (elapsed < FILTER_CAL_DURATION_MS) {
+        return;
+    }
+
+    s_cal_active = false;
     state_lock();
     s_state.filter_calibrating = false;
     s_state.filter_calibrate_progress_s = 30;
     state_unlock();
 
-    if (cal.sample_count > 0) {
-        cal.start_ms = start;
-        fishduino_settings_update(mutator_filter_calibrate, &cal, true);
+    if (s_cal_acc.sample_count > 0) {
+        s_cal_acc.start_ms = s_cal_start_ms;
+        fishduino_settings_update(mutator_filter_calibrate, &s_cal_acc, true);
     } else {
         ESP_LOGW(TAG, "Filter calibrate: no samples (filter on and online?)");
     }
 
-    fishduino_settings_t snap;
-    if (fishduino_settings_get_snapshot(&snap)) {
-        state_lock();
-        update_filter_alarm(&snap);
-        state_unlock();
-    }
+    memset(&s_cal_acc, 0, sizeof(s_cal_acc));
+
+    state_lock();
+    update_filter_alarm(settings);
+    state_unlock();
 }
 
 static void shelly_task(void *arg)
@@ -299,22 +307,26 @@ static void shelly_task(void *arg)
         }
 
         shelly_cmd_t cmd;
-        bool had_cmd = false;
 
         while (xQueueReceive(s_cmd_queue, &cmd, 0) == pdTRUE) {
-            had_cmd = true;
             if (cmd.type == SHELLY_CMD_CO2_SET) {
-                state_lock();
-                execute_co2_set(&settings, cmd.on);
-                state_unlock();
+                fishduino_settings_t co2_settings;
+                if (fishduino_settings_get_snapshot(&co2_settings)) {
+                    state_lock();
+                    execute_co2_set(&co2_settings, cmd.on);
+                    state_unlock();
+                }
             } else if (cmd.type == SHELLY_CMD_FILTER_CALIBRATE) {
-                run_filter_calibrate(&settings);
-                had_cmd = false;
+                filter_calibrate_start(&settings);
             }
         }
 
+        if (s_cal_active) {
+            filter_calibrate_tick(&settings);
+        }
+
         uint32_t t = now_ms();
-        if (had_cmd || (t - last_poll) >= FISHDUINO_SHELLY_POLL_MS) {
+        if ((t - last_poll) >= FISHDUINO_SHELLY_POLL_MS) {
             last_poll = t;
 
             state_lock();
@@ -323,7 +335,7 @@ static void shelly_task(void *arg)
             if (settings.shelly_co2.enabled) {
                 poll_plug(&settings.shelly_co2, &s_state.co2_status, false);
             }
-            if (settings.shelly_filter.enabled) {
+            if (settings.shelly_filter.enabled && !s_cal_active) {
                 bool was_off = !s_state.filter_status.output;
                 poll_plug(&settings.shelly_filter, &s_state.filter_status, true);
                 if (s_state.filter_status.output) {
