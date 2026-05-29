@@ -1,0 +1,55 @@
+# --- Build outputs (may embed sdkconfig.h with Wi-Fi credentials) ---
+build/
+apps/*/build/
+managed_components/
+
+# --- ESP-IDF menuconfig (Wi-Fi SSID/password live here after menuconfig) ---
+sdkconfig
+sdkconfig.old
+sdkconfig.*.old
+apps/*/sdkconfig
+apps/*/sdkconfig.old
+apps/*/sdkconfig.*.old
+
+# Local menuconfig overrides (often used for secrets)
+sdkconfig.local
+sdkconfig.defaults.local
+apps/*/sdkconfig.local
+apps/*/sdkconfig.defaults.local
+
+# --- Environment / credential files ---
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# --- Device-specific LAN config (Shelly IPs, etc.) ---
+main/shelly/shelly_config.local.h
+
+# --- NVS / flash dumps (may contain Wi-Fi or settings blobs) ---
+*.nvs.bin
+nvs_dump/
+flash_dump/
+
+# --- IDE / editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Logs ---
+*.log
+build/log/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Cursor / agent (if present in repo) ---
+.cursor/
