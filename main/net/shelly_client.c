@@ -89,9 +89,9 @@ static bool parse_switch_json(const char *body, fishduino_shelly_switch_status_t
         const cJSON *code = cJSON_GetObjectItemCaseSensitive(root, "code");
         const cJSON *message = cJSON_GetObjectItemCaseSensitive(root, "message");
         if (cJSON_IsNumber(code) && cJSON_IsString(message) && message->valuestring != NULL) {
-            snprintf(out->error_text, sizeof(out->error_text), "RPC %d: %s", code->valueint,
-                     message->valuestring);
-            out->error_text[sizeof(out->error_text) - 1] = '\0';
+            char rpc_err[80];
+            snprintf(rpc_err, sizeof(rpc_err), "RPC %d: %s", code->valueint, message->valuestring);
+            error_text_set(out, rpc_err);
         }
         cJSON_Delete(root);
         return false;
@@ -115,8 +115,7 @@ static bool parse_switch_json(const char *body, fishduino_shelly_switch_status_t
     if (cJSON_IsArray(errors) && cJSON_GetArraySize(errors) > 0) {
         const cJSON *e0 = cJSON_GetArrayItem(errors, 0);
         if (cJSON_IsString(e0) && e0->valuestring != NULL) {
-            strncpy(out->error_text, e0->valuestring, sizeof(out->error_text) - 1);
-            out->error_text[sizeof(out->error_text) - 1] = '\0';
+            error_text_set(out, e0->valuestring);
         }
     }
 
@@ -270,7 +269,7 @@ static bool shelly_set_switch_output(const char *ip, int switch_id, bool on)
 
     http_result_t hr;
     if (!http_get(url, &hr)) {
-        ESP_LOGW(TAG, "SET failed: %s status=%d", url, hr.status_code);
+        ESP_LOGW(TAG, "SET failed: %s status=%d truncated=%d", url, hr.status_code, (int)hr.truncated);
         if (hr.status_code == 401) {
             ESP_LOGW(TAG, "Shelly auth enabled — disable authentication on CO2 plug");
         }
