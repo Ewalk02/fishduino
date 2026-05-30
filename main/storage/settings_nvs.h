@@ -32,6 +32,33 @@ typedef struct {
     uint32_t pulse_ms;
 } fishduino_feeder_settings_t;
 
+#define FISHDUINO_FLUVAL_NAME_LEN 32
+#define FISHDUINO_FLUVAL_MAC_LEN  18
+
+typedef struct {
+    uint8_t pink;
+    uint8_t blue;
+    uint8_t cold_white;
+    uint8_t white;
+    uint8_t warm_white;
+} fishduino_fluval_recipe_t;
+
+typedef enum {
+    FISHDUINO_FLUVAL_TRANSPORT_DISABLED = 0,
+    FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE,
+    FISHDUINO_FLUVAL_TRANSPORT_UART,
+} fishduino_fluval_transport_mode_t;
+
+typedef struct {
+    bool enabled;
+    fishduino_fluval_transport_mode_t transport_mode;
+    char target_name[FISHDUINO_FLUVAL_NAME_LEN];
+    char target_mac[FISHDUINO_FLUVAL_MAC_LEN];
+    uint16_t poll_interval_s;
+    uint16_t stale_timeout_s;
+    fishduino_fluval_recipe_t manual_recipe;
+} fishduino_fluval_settings_t;
+
 typedef struct {
     fishduino_co2_settings_t co2;
     fishduino_feeder_settings_t feeder;
@@ -42,6 +69,7 @@ typedef struct {
     uint16_t co2_command_min_interval_s;
     fishduino_timezone_t timezone;
     float filter_baseline_watts; /**< 0 = uncalibrated */
+    fishduino_fluval_settings_t fluval;
 } fishduino_settings_t;
 
 const char *fishduino_timezone_name(fishduino_timezone_t tz);

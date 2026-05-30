@@ -1,4 +1,4 @@
-idf_component_register(SRCS
+set(fishduino_srcs
   "main.c"
   "storage/settings_nvs.c"
   "storage/settings_runtime.c"
@@ -16,6 +16,12 @@ idf_component_register(SRCS
   "net/safety_console.c"
   "net/status_console.c"
   "shelly/shelly_manager.c"
+  "fluval/fluval_protocol.c"
+  "fluval/fluval_transport.c"
+  "fluval/fluval_stub_transport.c"
+  "fluval/fluval_uart_transport.c"
+  "fluval/fluval_light.c"
+  "net/fluval_console.c"
   "ui/ui.c"
   "ui/screen_dashboard.c"
   "ui/screen_options.c"
@@ -24,9 +30,10 @@ idf_component_register(SRCS
   "ui/screen_co2_schedule.c"
   "ui/screen_commissioning.c"
   "ui/screen_diagnostics.c"
-  INCLUDE_DIRS
-  "."
-  REQUIRES
+  "ui/screen_fluval_settings.c"
+)
+
+set(fishduino_requires
   esp_wifi
   esp_netif
   esp_event
@@ -38,4 +45,17 @@ idf_component_register(SRCS
   console
   driver
   freertos
+)
+
+set(fishduino_priv_requires "")
+if(CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE)
+  list(APPEND fishduino_srcs
+    "fluval/fluval_ble_client.c"
+    "fluval/fluval_ble_transport.c"
+  )
+endif()
+
+idf_component_register(SRCS ${fishduino_srcs}
+  INCLUDE_DIRS "."
+  REQUIRES ${fishduino_requires} bt
 )

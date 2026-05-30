@@ -5,6 +5,7 @@
 #include "screen_co2_schedule.h"
 #include "screen_commissioning.h"
 #include "screen_diagnostics.h"
+#include "screen_fluval_settings.h"
 #include "screen_shelly_settings.h"
 #include "screen_wifi_settings.h"
 #include "shelly/shelly_manager.h"
@@ -19,7 +20,8 @@ static bool is_overlay(lv_obj_t *child)
 {
     return child == s_options_screen || child == fishduino_screen_wifi_root() ||
            child == fishduino_screen_shelly_root() || child == fishduino_screen_co2_schedule_root() ||
-           child == fishduino_screen_commissioning_root() || child == fishduino_screen_diagnostics_root();
+           child == fishduino_screen_commissioning_root() || child == fishduino_screen_diagnostics_root() ||
+           child == fishduino_screen_fluval_root();
 }
 
 static void set_dashboard_visible(bool visible)
@@ -48,6 +50,7 @@ static void hide_all_overlays(void)
     fishduino_screen_co2_schedule_hide();
     fishduino_screen_commissioning_hide();
     fishduino_screen_diagnostics_hide();
+    fishduino_screen_fluval_hide();
 }
 
 static void hide_options(void)
@@ -111,6 +114,12 @@ static void btn_diagnostics_cb(lv_event_t *e)
 {
     (void)e;
     fishduino_screen_diagnostics_show();
+}
+
+static void btn_fluval_cb(lv_event_t *e)
+{
+    (void)e;
+    fishduino_screen_fluval_show();
 }
 
 static void btn_filter_cal_cb(lv_event_t *e)
@@ -214,6 +223,12 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     lv_label_set_text(lv_label_create(btn_diag), "Diagnostics");
     lv_obj_add_event_cb(btn_diag, btn_diagnostics_cb, LV_EVENT_CLICKED, NULL);
 
+    lv_obj_t *btn_fluval = lv_btn_create(h.screen);
+    lv_obj_set_size(btn_fluval, 200, 32);
+    lv_obj_align(btn_fluval, LV_ALIGN_TOP_LEFT, 220, 208);
+    lv_label_set_text(lv_label_create(btn_fluval), "Fluval Settings");
+    lv_obj_add_event_cb(btn_fluval, btn_fluval_cb, LV_EVENT_CLICKED, NULL);
+
     lv_obj_t *tz_lbl = lv_label_create(h.screen);
     lv_label_set_text(tz_lbl, "Timezone:");
     lv_obj_align(tz_lbl, LV_ALIGN_TOP_LEFT, 8, 248);
@@ -247,6 +262,7 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     fishduino_screen_co2_schedule_build(parent);
     fishduino_screen_commissioning_build(parent);
     fishduino_screen_diagnostics_build(parent);
+    fishduino_screen_fluval_build(parent);
 
     return h;
 }

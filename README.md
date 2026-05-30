@@ -131,6 +131,11 @@ Read-only: Fishduino never sends `Switch.Set` to the filter plug. Low-power alar
 | `co2_schedule times 09:00 17:00` | Set ON/OFF times |
 | `filter_calibrate` | 30 s watt baseline (filter lamp on) |
 | `status` | Active Wi-Fi, device IP, Shelly, CO2 schedule, filter calibration |
+| `fluval` | Fluval Plant 4.0 state |
+| `fluval_read` | Request Fluval status |
+| `fluval_manual` / `fluval_auto` | Fluval mode |
+| `fluval_setall <0-100>` | Set all Fluval channels |
+| `fluval_set <p> <b> <cw> <w> <ww>` | Set Fluval channels |
 | `safety_test` | Commissioning checklist |
 
 Touch **CO2 ON / OFF / AUTO** on the dashboard for manual override.
@@ -146,3 +151,115 @@ GPIO assignments in `main/hardware_pins.h`.
 ## Chihiros heater (future)
 
 Planned BLE integration via ESP32-C6; not in this firmware yet.
+
+## Fluval Plant 4.0 light
+
+Fishduino can monitor and control a Fluval Plant 4.0 aquarium light over a UART-connected BLE helper (ESP32-C3/S3/C6). The ESP32-P4 firmware does not talk BLE directly; it sends simple text commands to a helper that owns the GATT session.
+
+BLE helper firmware: [`tools/fluval_ble_helper/README.md`](tools/fluval_ble_helper/README.md)
+
+```text
+Fishduino ESP32-P4  --UART-->  BLE helper  --BLE-->  Fluval Plant 4.0
+```
+
+### BLE protocol (helper-side)
+
+| Item | Value |
+|------|-------|
+| Device name | `Plant4.0_450467` (configurable) |
+| Service | `FFF0` (`0000fff0-0000-1000-8000-00805f9b34fb`) |
+| Notify | `FFF1` — responses |
+| Write | `FFF2` — commands |
+
+Confirmed commands (hex written to FFF2):
+
+| Action | TX |
+|--------|-----|
+| Read status | `d0ff` |
+| Set Manual | `d1a10100` |
+| Set Auto | `d1a10101` |
+| Set channels | `d1a60318<pink>0418<blue>0518<cold_white>0618<white>0718<warm_white>0e00` |
+
+Status responses start with `d2b0000e01<mode>02f5...` where mode `00` = Manual, `01` = Auto. LED channels after marker `02 f5`: `03` Pink, `04` Blue, `05` Cold White, `06` White, `07` Warm White.
+
+### Supported in Fishduino
+
+- Read mode (Manual / Auto) and five channel percentages
+- Set Manual / Auto mode
+- Set manual channel percentages
+- Periodic status polling (default 10 s)
+- Dashboard display and basic controls
+- Serial console commands
+
+### Architecture
+
+Primary path (ESP32-P4 Fishduino):
+
+```text
+Fishduino app → ESP-Hosted (SDIO) → onboard ESP32-C6 → BLE → Fluval Plant 4.0
+```
+
+The onboard C6 runs **ESP-Hosted slave** firmware (same as Wi-Fi). NimBLE on the P4 host uses ESP-Hosted VHCI for BLE central role. UART to an external helper board is optional fallback only (`tools/fluval_ble_helper/`).
+
+### Not yet supported
+
+- Editing the full Auto schedule (timepoints) stored in the light
+
+### Transport modes (Kconfig + NVS)
+
+| Mode | Description |
+|------|-------------|
+| Disabled | No Fluval I/O (default until enabled in UI) |
+| Hosted BLE | Onboard ESP32-C6 via ESP-Hosted (primary) |
+| UART helper | External ESP32-C3/S3/C6 running `tools/fluval_ble_helper/` |
+
+Default build compiles hosted BLE (`CONFIG_FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_HOSTED_BLE`). Integration stays off until **OPTIONS → Fluval Settings → Enable**.
+
+**C6 note:** The coprocessor must run ESP-Hosted slave firmware with Bluetooth enabled (do not flash the standalone UART helper to the onboard C6).
+
+Required `sdkconfig` options (in `sdkconfig.defaults` when hosted BLE is enabled):
+
+```text
+CONFIG_BT_ENABLED=y
+CONFIG_BT_CONTROLLER_DISABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_ESP_WIFI_REMOTE_LIBRARY_HOSTED=y
+CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE=y
+CONFIG_ESP_HOSTED_NIMBLE_HCI_VHCI=y
+```
+
+### UART helper protocol (fallback)
+
+```text
+FLUVAL READ
+FLUVAL MODE MANUAL
+FLUVAL MODE AUTO
+FLUVAL SET <pink> <blue> <cold_white> <white> <warm_white>
+FLUVAL SETALL <percent>
+```
+
+Helper → P4:
+
+```text
+FLUVAL STATE <mode> <pink> <blue> <cold_white> <white> <warm_white> AVG <avg> RSSI <rssi>
+FLUVAL OK
+FLUVAL ERROR <reason>
+```
+
+### Configuration
+
+Fluval is **disabled by default**. Enable under **OPTIONS → Fluval Settings**. Default transport is **hosted BLE** on the onboard ESP32-C6; UART helper pins in `main/hardware_pins.h` remain placeholders (`-1`) unless using fallback mode. Defaults: target name `Plant4.0_450467`, poll 10 s, stale timeout 30 s.
+
+Close FluvalConnect and turn off phone Bluetooth while Fishduino controls the light.
+
+### Serial commands
+
+| Command | Description |
+|---------|-------------|
+| `fluval` | Fluval state (mode, channels, link status) |
+| `fluval_read` | Queue status read |
+| `fluval_manual` / `fluval_auto` | Set Manual / Auto mode |
+| `fluval_setall <0-100>` | Set all channels to same percent |
+| `fluval_set <p> <b> <cw> <w> <ww>` | Set individual channels |
+
+Dashboard buttons **LT AUTO**, **LT MAN**, and **LT 50%** queue the same actions (50% = set-all preset).

@@ -13,4 +13,27 @@ menu "Fishduino Configuration"
         help
             Wi-Fi password (WPA2/WPA3). Leave empty for open networks.
 
+    choice FISHDUINO_FLUVAL_DEFAULT_TRANSPORT
+        prompt "Fluval default transport"
+        default FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_DISABLED
+        help
+            Default Fluval transport when enabled in NVS settings.
+            Hosted BLE uses the onboard ESP32-C6 via ESP-Hosted (SDIO).
+            UART helper is an optional external board fallback.
+
+        config FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_DISABLED
+            bool "Disabled"
+        config FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_HOSTED_BLE
+            bool "Hosted BLE (onboard ESP32-C6)"
+            select FISHDUINO_FLUVAL_HOSTED_BLE
+        config FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_UART
+            bool "UART helper fallback"
+    endchoice
+
+    config FISHDUINO_FLUVAL_HOSTED_BLE
+        bool
+        default n
+        help
+            Build hosted NimBLE Fluval transport (requires ESP-Hosted BT on C6).
+
 endmenu

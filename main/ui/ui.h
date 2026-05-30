@@ -13,6 +13,9 @@ typedef struct {
     lv_obj_t *label_filter;
     lv_obj_t *label_filter_energy;
     lv_obj_t *label_filter_alarm;
+    lv_obj_t *label_fluval_title;
+    lv_obj_t *label_fluval_summary;
+    lv_obj_t *label_fluval_channels;
     lv_obj_t *label_wifi;
 } fishduino_ui_t;
 
