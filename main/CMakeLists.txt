@@ -16,6 +16,12 @@ idf_component_register(SRCS
   "net/safety_console.c"
   "net/status_console.c"
   "shelly/shelly_manager.c"
+  "fluval/fluval_protocol.c"
+  "fluval/fluval_transport.c"
+  "fluval/fluval_stub_transport.c"
+  "fluval/fluval_uart_transport.c"
+  "fluval/fluval_light.c"
+  "net/fluval_console.c"
   "ui/ui.c"
   "ui/screen_dashboard.c"
   "ui/screen_options.c"
@@ -24,6 +30,7 @@ idf_component_register(SRCS
   "ui/screen_co2_schedule.c"
   "ui/screen_commissioning.c"
   "ui/screen_diagnostics.c"
+  "ui/screen_fluval_settings.c"
   INCLUDE_DIRS
   "."
   REQUIRES

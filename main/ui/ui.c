@@ -5,6 +5,7 @@
 
 #include "co2/co2_gpio.h"
 #include "feeder/feeder_actuator.h"
+#include "fluval/fluval_light.h"
 #include "net/wifi_manager.h"
 #include "screen_commissioning.h"
 #include "screen_diagnostics.h"
@@ -40,6 +41,9 @@ void fishduino_ui_init(fishduino_ui_t *ui)
     ui->label_filter = h.label_filter;
     ui->label_filter_energy = h.label_filter_energy;
     ui->label_filter_alarm = h.label_filter_alarm;
+    ui->label_fluval_title = h.label_fluval_title;
+    ui->label_fluval_summary = h.label_fluval_summary;
+    ui->label_fluval_channels = h.label_fluval_channels;
     ui->label_wifi = h.label_wifi;
 
     fishduino_screen_options_build(ui->root);
@@ -176,6 +180,36 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
             lv_label_set_text(ui->label_feeder, "Feeder: GPIO not configured");
         } else {
             lv_label_set_text(ui->label_feeder, "Feeder: ready");
+        }
+    }
+
+    fishduino_fluval_state_t fluval;
+    fishduino_fluval_get_state(&fluval);
+    fishduino_fluval_link_t link = fishduino_fluval_get_link_status();
+
+    if (ui->label_fluval_title) {
+        lv_label_set_text(ui->label_fluval_title, "Plant 4.0");
+    }
+
+    if (ui->label_fluval_summary) {
+        if (link == FISHDUINO_FLUVAL_LINK_DISABLED) {
+            snprintf(buf, sizeof(buf), "Mode: -- | Output: --%% | DISABLED");
+        } else if (fluval.last_update_ms == 0) {
+            snprintf(buf, sizeof(buf), "Mode: -- | Output: --%% | %s", fishduino_fluval_link_text(link));
+        } else {
+            snprintf(buf, sizeof(buf), "Mode: %s | Output: %u%% | %s", fishduino_fluval_mode_text(fluval.mode),
+                     (unsigned)fluval.avg_output, fishduino_fluval_link_text(link));
+        }
+        lv_label_set_text(ui->label_fluval_summary, buf);
+    }
+
+    if (ui->label_fluval_channels) {
+        if (fluval.last_update_ms == 0 || link == FISHDUINO_FLUVAL_LINK_DISABLED) {
+            lv_label_set_text(ui->label_fluval_channels, "P -- B -- CW -- W -- WW --");
+        } else {
+            snprintf(buf, sizeof(buf), "P %u B %u CW %u W %u WW %u", (unsigned)fluval.pink, (unsigned)fluval.blue,
+                     (unsigned)fluval.cold_white, (unsigned)fluval.white, (unsigned)fluval.warm_white);
+            lv_label_set_text(ui->label_fluval_channels, buf);
         }
     }
 }

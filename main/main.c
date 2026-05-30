@@ -18,6 +18,8 @@
 #include "co2/co2_gpio.h"
 #include "feeder/feeder_schedule.h"
 #include "feeder/feeder_actuator.h"
+#include "fluval/fluval_light.h"
+#include "net/fluval_console.h"
 #include "net/safety_console.h"
 #include "net/status_console.h"
 #include "net/shelly_console.h"
@@ -96,6 +98,7 @@ static void scheduler_tick(const fishduino_time_snapshot_t *now, void *ctx)
     fishduino_shelly_co2_tick(&app->co2, now);
     fishduino_shelly_filter_alarm_tick();
     fishduino_feeder_tick(&app->feeder, now);
+    fishduino_fluval_tick();
 
     if (app->ui == NULL) {
         return;
@@ -121,9 +124,12 @@ void app_main(void)
     fishduino_co2_init(&s_app.co2, &s_app.settings);
     fishduino_feeder_init(&s_app.feeder, &s_app.settings);
     fishduino_shelly_manager_init();
+    fishduino_fluval_init();
+    fishduino_fluval_start();
 
     console_init();
     fishduino_shelly_console_register();
+    fishduino_fluval_console_register();
     fishduino_safety_console_register();
     fishduino_status_console_register();
     xTaskCreate(repl_task, "console", 4096, NULL, 3, NULL);
