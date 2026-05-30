@@ -43,8 +43,15 @@ typedef struct {
     uint8_t warm_white;
 } fishduino_fluval_recipe_t;
 
+typedef enum {
+    FISHDUINO_FLUVAL_TRANSPORT_DISABLED = 0,
+    FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE,
+    FISHDUINO_FLUVAL_TRANSPORT_UART,
+} fishduino_fluval_transport_mode_t;
+
 typedef struct {
     bool enabled;
+    fishduino_fluval_transport_mode_t transport_mode;
     char target_name[FISHDUINO_FLUVAL_NAME_LEN];
     char target_mac[FISHDUINO_FLUVAL_MAC_LEN];
     uint16_t poll_interval_s;

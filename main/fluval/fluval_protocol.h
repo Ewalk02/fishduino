@@ -38,7 +38,18 @@ size_t fluval_protocol_build_set_auto(uint8_t *out, size_t out_len);
 size_t fluval_protocol_build_set_channels(uint8_t pink, uint8_t blue, uint8_t cold_white, uint8_t white,
                                           uint8_t warm_white, uint8_t *out, size_t out_len);
 
+typedef enum {
+    FLUVAL_PROTOCOL_ACK_NONE = 0,
+    FLUVAL_PROTOCOL_ACK_MODE_MANUAL,
+    FLUVAL_PROTOCOL_ACK_MODE_AUTO,
+    FLUVAL_PROTOCOL_ACK_SET_CHANNELS,
+    FLUVAL_PROTOCOL_ACK_STATUS,
+} fluval_protocol_ack_t;
+
 bool fluval_protocol_parse_status(const uint8_t *data, size_t len, fluval_protocol_status_t *out);
+fluval_protocol_ack_t fluval_protocol_parse_ack(const uint8_t *data, size_t len, fluval_protocol_status_t *status_out);
+const char *fluval_protocol_mode_token(fluval_protocol_mode_t mode);
+
 bool fluval_protocol_run_selftests(void);
 
 #ifdef __cplusplus

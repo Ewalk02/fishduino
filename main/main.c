@@ -125,7 +125,6 @@ void app_main(void)
     fishduino_feeder_init(&s_app.feeder, &s_app.settings);
     fishduino_shelly_manager_init();
     fishduino_fluval_init();
-    fishduino_fluval_start();
 
     console_init();
     fishduino_shelly_console_register();
@@ -155,4 +154,6 @@ void app_main(void)
     } else {
         ESP_LOGW(TAG, "Wi-Fi not available (stub or init failed); Shelly disabled until connected");
     }
+
+    fishduino_fluval_start();
 }

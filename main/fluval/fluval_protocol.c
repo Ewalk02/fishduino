@@ -202,6 +202,64 @@ bool fluval_protocol_parse_status(const uint8_t *data, size_t len, fluval_protoc
     return true;
 }
 
+static const uint8_t ACK_MANUAL[] = {0xd2, 0xa1, 0x01, 0x00};
+static const uint8_t ACK_AUTO[] = {0xd2, 0xa1, 0x01, 0x01};
+
+const char *fluval_protocol_mode_token(fluval_protocol_mode_t mode)
+{
+    switch (mode) {
+    case FLUVAL_PROTOCOL_MODE_MANUAL:
+        return "MANUAL";
+    case FLUVAL_PROTOCOL_MODE_AUTO:
+        return "AUTO";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+fluval_protocol_ack_t fluval_protocol_parse_ack(const uint8_t *data, size_t len, fluval_protocol_status_t *status_out)
+{
+    if (data == NULL || len < 4) {
+        return FLUVAL_PROTOCOL_ACK_NONE;
+    }
+
+    if (len >= sizeof(ACK_MANUAL) && memcmp(data, ACK_MANUAL, sizeof(ACK_MANUAL)) == 0) {
+        return FLUVAL_PROTOCOL_ACK_MODE_MANUAL;
+    }
+    if (len >= sizeof(ACK_AUTO) && memcmp(data, ACK_AUTO, sizeof(ACK_AUTO)) == 0) {
+        return FLUVAL_PROTOCOL_ACK_MODE_AUTO;
+    }
+    if (len >= 2 && data[0] == 0xd2 && data[1] == 0xa6) {
+        return FLUVAL_PROTOCOL_ACK_SET_CHANNELS;
+    }
+    if (len >= sizeof(STATUS_HEADER) && memcmp(data, STATUS_HEADER, sizeof(STATUS_HEADER)) == 0) {
+        if (status_out != NULL) {
+            fluval_protocol_parse_status(data, len, status_out);
+        }
+        return FLUVAL_PROTOCOL_ACK_STATUS;
+    }
+
+    return FLUVAL_PROTOCOL_ACK_NONE;
+}
+
+static bool selftest_parse_acks(void)
+{
+    static const uint8_t ack_manual[] = {0xd2, 0xa1, 0x01, 0x00};
+    fluval_protocol_status_t st = {0};
+
+    if (fluval_protocol_parse_ack(ack_manual, sizeof(ack_manual), NULL) != FLUVAL_PROTOCOL_ACK_MODE_MANUAL) {
+        return false;
+    }
+    if (fluval_protocol_parse_ack(TEST_MANUAL_STATUS, sizeof(TEST_MANUAL_STATUS), &st) !=
+        FLUVAL_PROTOCOL_ACK_STATUS) {
+        return false;
+    }
+    if (!st.valid || st.mode != FLUVAL_PROTOCOL_MODE_MANUAL) {
+        return false;
+    }
+    return true;
+}
+
 static bool selftest_build_commands(void)
 {
     uint8_t buf[32];
@@ -290,5 +348,6 @@ static bool selftest_parse_failures(void)
 
 bool fluval_protocol_run_selftests(void)
 {
-    return selftest_build_commands() && selftest_parse_manual_auto() && selftest_parse_failures();
+    return selftest_build_commands() && selftest_parse_manual_auto() && selftest_parse_failures() &&
+           selftest_parse_acks();
 }

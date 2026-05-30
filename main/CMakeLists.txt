@@ -1,4 +1,4 @@
-idf_component_register(SRCS
+set(fishduino_srcs
   "main.c"
   "storage/settings_nvs.c"
   "storage/settings_runtime.c"
@@ -31,9 +31,9 @@ idf_component_register(SRCS
   "ui/screen_commissioning.c"
   "ui/screen_diagnostics.c"
   "ui/screen_fluval_settings.c"
-  INCLUDE_DIRS
-  "."
-  REQUIRES
+)
+
+set(fishduino_requires
   esp_wifi
   esp_netif
   esp_event
@@ -45,4 +45,17 @@ idf_component_register(SRCS
   console
   driver
   freertos
+)
+
+set(fishduino_priv_requires "")
+if(CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE)
+  list(APPEND fishduino_srcs
+    "fluval/fluval_ble_client.c"
+    "fluval/fluval_ble_transport.c"
+  )
+endif()
+
+idf_component_register(SRCS ${fishduino_srcs}
+  INCLUDE_DIRS "."
+  REQUIRES ${fishduino_requires} bt
 )

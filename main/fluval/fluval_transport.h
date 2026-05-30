@@ -33,6 +33,7 @@ bool fishduino_fluval_transport_is_active(fishduino_fluval_transport_t *transpor
 
 const fishduino_fluval_transport_ops_t *fishduino_fluval_stub_transport_ops(void);
 const fishduino_fluval_transport_ops_t *fishduino_fluval_uart_transport_ops(void);
+const fishduino_fluval_transport_ops_t *fishduino_fluval_ble_transport_ops(void);
 
 #ifdef __cplusplus
 }

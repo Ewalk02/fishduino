@@ -2,6 +2,10 @@
 
 #include "esp_err.h"
 
+#if CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE
+#include "fluval_ble_transport.h"
+#endif
+
 esp_err_t fishduino_fluval_transport_init(fishduino_fluval_transport_t *transport,
                                           fishduino_fluval_transport_line_cb_t line_cb, void *line_ctx)
 {
@@ -19,6 +23,12 @@ esp_err_t fishduino_fluval_transport_init(fishduino_fluval_transport_t *transpor
                                                                       void *ctx);
         return fishduino_fluval_uart_transport_set_callback(line_cb, line_ctx);
     }
+
+#if CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE
+    if (transport->ops == fishduino_fluval_ble_transport_ops()) {
+        return fishduino_fluval_ble_transport_set_callback(line_cb, line_ctx);
+    }
+#endif
 
     (void)line_cb;
     (void)line_ctx;

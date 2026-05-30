@@ -7,12 +7,38 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "shelly/shelly_config.h"
+#include "sdkconfig.h"
 
 static const char *TAG = "settings";
 static const char *NVS_NAMESPACE = "fishduino";
 static const char *NVS_KEY_SETTINGS_V2 = "settings_v2";
 static const char *NVS_KEY_SETTINGS_V3 = "settings_v3";
 static const char *NVS_KEY_SETTINGS_V4 = "settings_v4";
+static const char *NVS_KEY_SETTINGS_V5 = "settings_v5";
+
+/** Fluval settings before transport_mode was added (settings v4). */
+typedef struct {
+    bool enabled;
+    char target_name[FISHDUINO_FLUVAL_NAME_LEN];
+    char target_mac[FISHDUINO_FLUVAL_MAC_LEN];
+    uint16_t poll_interval_s;
+    uint16_t stale_timeout_s;
+    fishduino_fluval_recipe_t manual_recipe;
+} fishduino_fluval_settings_v4_t;
+
+/** Full settings blob before transport_mode was added. */
+typedef struct {
+    fishduino_co2_settings_t co2;
+    fishduino_feeder_settings_t feeder;
+    fishduino_shelly_plug_settings_t shelly_co2;
+    fishduino_shelly_plug_settings_t shelly_filter;
+    float filter_running_watts_threshold;
+    uint16_t filter_low_power_alarm_delay_s;
+    uint16_t co2_command_min_interval_s;
+    fishduino_timezone_t timezone;
+    float filter_baseline_watts;
+    fishduino_fluval_settings_v4_t fluval;
+} fishduino_settings_v4_t;
 
 /** Layout before fluval settings were added. */
 typedef struct {
@@ -51,6 +77,13 @@ static void fluval_defaults(fishduino_fluval_settings_t *fluval)
 {
     memset(fluval, 0, sizeof(*fluval));
     fluval->enabled = false;
+#if CONFIG_FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_HOSTED_BLE
+    fluval->transport_mode = FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE;
+#elif CONFIG_FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_UART
+    fluval->transport_mode = FISHDUINO_FLUVAL_TRANSPORT_UART;
+#else
+    fluval->transport_mode = FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
+#endif
     snprintf(fluval->target_name, sizeof(fluval->target_name), "%s", "Plant4.0_450467");
     snprintf(fluval->target_mac, sizeof(fluval->target_mac), "%s", "FA:9D:02:45:04:67");
     fluval->poll_interval_s = 10;
@@ -142,6 +175,34 @@ static void copy_v3_to_v4(const fishduino_settings_v3_t *v3, fishduino_settings_
     out->filter_baseline_watts = v3->filter_baseline_watts;
 }
 
+static void copy_v4_to_v5(const fishduino_settings_v4_t *v4, fishduino_settings_t *out)
+{
+    fishduino_settings_defaults(out);
+    out->co2 = v4->co2;
+    out->feeder = v4->feeder;
+    out->shelly_co2 = v4->shelly_co2;
+    out->shelly_filter = v4->shelly_filter;
+    out->filter_running_watts_threshold = v4->filter_running_watts_threshold;
+    out->filter_low_power_alarm_delay_s = v4->filter_low_power_alarm_delay_s;
+    out->co2_command_min_interval_s = v4->co2_command_min_interval_s;
+    out->timezone = v4->timezone;
+    out->filter_baseline_watts = v4->filter_baseline_watts;
+
+    out->fluval.enabled = v4->fluval.enabled;
+    strncpy(out->fluval.target_name, v4->fluval.target_name, sizeof(out->fluval.target_name) - 1);
+    strncpy(out->fluval.target_mac, v4->fluval.target_mac, sizeof(out->fluval.target_mac) - 1);
+    out->fluval.poll_interval_s = v4->fluval.poll_interval_s;
+    out->fluval.stale_timeout_s = v4->fluval.stale_timeout_s;
+    out->fluval.manual_recipe = v4->fluval.manual_recipe;
+#if CONFIG_FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_HOSTED_BLE
+    out->fluval.transport_mode = FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE;
+#elif CONFIG_FISHDUINO_FLUVAL_DEFAULT_TRANSPORT_UART
+    out->fluval.transport_mode = FISHDUINO_FLUVAL_TRANSPORT_UART;
+#else
+    out->fluval.transport_mode = FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
+#endif
+}
+
 bool fishduino_settings_load(fishduino_settings_t *out)
 {
     fishduino_settings_defaults(out);
@@ -160,9 +221,20 @@ bool fishduino_settings_load(fishduino_settings_t *out)
     }
 
     size_t size = sizeof(*out);
-    err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V4, out, &size);
+    err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V5, out, &size);
     if (err == ESP_OK && size == sizeof(*out)) {
         nvs_close(nvh);
+        return true;
+    }
+
+    fishduino_settings_v4_t v4 = {0};
+    size = sizeof(v4);
+    err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V4, &v4, &size);
+    if (err == ESP_OK && size == sizeof(v4)) {
+        ESP_LOGI(TAG, "Migrating settings v4 -> v5");
+        copy_v4_to_v5(&v4, out);
+        nvs_close(nvh);
+        fishduino_settings_save(out);
         return true;
     }
 
@@ -170,7 +242,7 @@ bool fishduino_settings_load(fishduino_settings_t *out)
     size = sizeof(v3);
     err = nvs_get_blob(nvh, NVS_KEY_SETTINGS_V3, &v3, &size);
     if (err == ESP_OK && size == sizeof(v3)) {
-        ESP_LOGI(TAG, "Migrating settings v3 -> v4");
+        ESP_LOGI(TAG, "Migrating settings v3 -> v5");
         copy_v3_to_v4(&v3, out);
         nvs_close(nvh);
         fishduino_settings_save(out);
@@ -183,7 +255,7 @@ bool fishduino_settings_load(fishduino_settings_t *out)
     nvs_close(nvh);
 
     if (err == ESP_OK && size == sizeof(v2)) {
-        ESP_LOGI(TAG, "Migrating settings v2 -> v4");
+        ESP_LOGI(TAG, "Migrating settings v2 -> v5");
         copy_v2_to_v3(&v2, out);
         fishduino_settings_save(out);
         return true;
@@ -209,7 +281,7 @@ bool fishduino_settings_save(const fishduino_settings_t *in)
         return false;
     }
 
-    err = nvs_set_blob(nvh, NVS_KEY_SETTINGS_V4, in, sizeof(*in));
+    err = nvs_set_blob(nvh, NVS_KEY_SETTINGS_V5, in, sizeof(*in));
     if (err == ESP_OK) {
         err = nvs_commit(nvh);
     }

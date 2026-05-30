@@ -14,8 +14,13 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "hardware_pins.h"
+#include "sdkconfig.h"
 #include "storage/settings_nvs.h"
 #include "storage/settings_runtime.h"
+
+#if CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE
+#include "fluval_ble_transport.h"
+#endif
 
 static const char *TAG = "fluval";
 
@@ -45,6 +50,7 @@ static bool s_task_running;
 static uint32_t s_last_poll_ms;
 static bool s_transport_usable;
 static fishduino_fluval_settings_t s_cfg;
+static fishduino_fluval_transport_mode_t s_active_transport;
 
 static uint32_t now_ms(void)
 {
@@ -78,9 +84,42 @@ static void refresh_config(void)
     }
 }
 
+static fishduino_fluval_transport_mode_t effective_transport(void)
+{
+    switch (s_cfg.transport_mode) {
+    case FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE:
+#if CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE
+        return FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE;
+#else
+        return FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
+#endif
+    case FISHDUINO_FLUVAL_TRANSPORT_UART:
+        return uart_hw_available() ? FISHDUINO_FLUVAL_TRANSPORT_UART : FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
+    default:
+        return FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
+    }
+}
+
+static const fishduino_fluval_transport_ops_t *ops_for_transport(fishduino_fluval_transport_mode_t mode)
+{
+    switch (mode) {
+#if CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE
+    case FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE:
+        return fishduino_fluval_ble_transport_ops();
+#endif
+    case FISHDUINO_FLUVAL_TRANSPORT_UART:
+        return fishduino_fluval_uart_transport_ops();
+    default:
+        return fishduino_fluval_stub_transport_ops();
+    }
+}
+
 static bool integration_enabled(void)
 {
-    return s_cfg.enabled && uart_hw_available();
+    if (!s_cfg.enabled) {
+        return false;
+    }
+    return effective_transport() != FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
 }
 
 static fishduino_fluval_mode_t mode_from_token(const char *token)
@@ -233,6 +272,31 @@ static void handle_command(const fluval_cmd_t *cmd)
     }
 }
 
+static esp_err_t start_transport(fishduino_fluval_transport_mode_t mode)
+{
+#if CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE
+    if (mode == FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE) {
+        fishduino_fluval_ble_transport_apply_config(s_cfg.target_name, s_cfg.poll_interval_s, s_cfg.stale_timeout_s);
+    }
+#endif
+
+    fishduino_fluval_transport_stop(&s_transport);
+    s_transport.ops = ops_for_transport(mode);
+    s_transport.ctx = NULL;
+    if (fishduino_fluval_transport_init(&s_transport, on_transport_line, NULL) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    if (fishduino_fluval_transport_start(&s_transport) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    s_active_transport = mode;
+    s_transport_usable = fishduino_fluval_transport_is_active(&s_transport);
+    if (mode == FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE) {
+        s_transport_usable = true;
+    }
+    return s_transport_usable || mode == FISHDUINO_FLUVAL_TRANSPORT_HOSTED_BLE ? ESP_OK : ESP_FAIL;
+}
+
 static void fluval_task(void *arg)
 {
     (void)arg;
@@ -241,20 +305,20 @@ static void fluval_task(void *arg)
     while (s_task_running) {
         refresh_config();
 
+        fishduino_fluval_transport_mode_t want = effective_transport();
+
         if (!integration_enabled()) {
-            s_transport_usable = false;
+            if (s_transport_usable) {
+                fishduino_fluval_transport_stop(&s_transport);
+                s_transport_usable = false;
+                s_active_transport = FISHDUINO_FLUVAL_TRANSPORT_DISABLED;
+            }
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
 
-        if (!s_transport_usable) {
-            fishduino_fluval_transport_stop(&s_transport);
-            s_transport.ops = fishduino_fluval_uart_transport_ops();
-            s_transport.ctx = NULL;
-            if (fishduino_fluval_transport_init(&s_transport, on_transport_line, NULL) == ESP_OK &&
-                fishduino_fluval_transport_start(&s_transport) == ESP_OK) {
-                s_transport_usable = fishduino_fluval_transport_is_active(&s_transport);
-            }
+        if (!s_transport_usable || want != s_active_transport) {
+            s_transport_usable = start_transport(want) == ESP_OK;
         }
 
         if (xQueueReceive(s_cmd_queue, &cmd, pdMS_TO_TICKS(200)) == pdTRUE) {
