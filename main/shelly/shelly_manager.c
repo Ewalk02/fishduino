@@ -239,11 +239,20 @@ static bool execute_co2_set(const fishduino_settings_t *settings, bool on)
     return true;
 }
 
+static void record_heater_command_attempt(void)
+{
+    state_lock();
+    s_state.last_heater_command_ms = now_ms();
+    state_unlock();
+}
+
 static bool execute_heater_set(const fishduino_settings_t *settings, bool on)
 {
     if (!settings->shelly_heater.enabled) {
         return false;
     }
+
+    record_heater_command_attempt();
 
     if (!fishduino_shelly_heater_set_output(settings, on)) {
         return false;
@@ -251,7 +260,6 @@ static bool execute_heater_set(const fishduino_settings_t *settings, bool on)
 
     state_lock();
     s_state.heater_status.output = on;
-    s_state.last_heater_command_ms = now_ms();
     state_unlock();
     return true;
 }
@@ -693,6 +701,7 @@ void fishduino_shelly_heater_apply_power(bool want_on)
         return;
     }
 
+    record_heater_command_attempt();
     queue_heater_set(want_on);
 }
 

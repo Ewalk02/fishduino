@@ -30,6 +30,7 @@ typedef struct {
     bool filter_output_off_alert;
     uint32_t last_poll_ms;
     uint32_t last_co2_command_ms;
+    /** Last heater Switch.Set queue/attempt (success or failure). */
     uint32_t last_heater_command_ms;
     uint32_t last_filter_good_power_ms;
     uint32_t last_filter_output_on_ms;
