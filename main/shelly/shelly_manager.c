@@ -251,6 +251,7 @@ static bool execute_heater_set(const fishduino_settings_t *settings, bool on)
 
     state_lock();
     s_state.heater_status.output = on;
+    s_state.last_heater_command_ms = now_ms();
     state_unlock();
     return true;
 }
@@ -659,6 +660,15 @@ void fishduino_shelly_heater_command_now(bool on)
     queue_heater_set(on);
 }
 
+static bool heater_cmd_interval_elapsed(uint32_t last_cmd_ms)
+{
+    uint32_t t = now_ms();
+    if (last_cmd_ms == 0) {
+        return true;
+    }
+    return (t - last_cmd_ms) >= FISHDUINO_SHELLY_HEATER_CMD_MIN_MS;
+}
+
 void fishduino_shelly_heater_apply_power(bool want_on)
 {
     fishduino_settings_t settings;
@@ -668,17 +678,21 @@ void fishduino_shelly_heater_apply_power(bool want_on)
 
     bool relay_on = false;
     bool online = false;
+    uint32_t last_cmd_ms = 0;
     state_lock();
     relay_on = s_state.heater_status.output;
     online = s_state.heater_status.online;
+    last_cmd_ms = s_state.last_heater_command_ms;
     state_unlock();
 
     if (online && relay_on == want_on) {
         return;
     }
-    if (!online && !want_on) {
+
+    if (!heater_cmd_interval_elapsed(last_cmd_ms)) {
         return;
     }
+
     queue_heater_set(want_on);
 }
 

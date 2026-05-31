@@ -143,6 +143,28 @@ static void refresh_status_from_ble(void)
     s_status.state = s_status.heating ? HEATER_STATE_ON : HEATER_STATE_OFF;
 }
 
+static bool heater_shelly_power_allowed(const fishduino_settings_t *st)
+{
+    if (st == NULL || !st->shelly_heater.enabled) {
+        return false;
+    }
+    if (!st->heater.enabled) {
+        return false;
+    }
+    if (fishduino_maintenance_mode_is_active()) {
+        return false;
+    }
+    if (s_status.alarm != HEATER_ALARM_NONE) {
+        return false;
+    }
+
+    char err[64] = {0};
+    if (!heater_safety_allows_heating(&s_status, st->heater.target_temp_f, err, sizeof(err))) {
+        return false;
+    }
+    return true;
+}
+
 void heater_manager_tick(void)
 {
     apply_config_from_settings();
@@ -153,9 +175,7 @@ void heater_manager_tick(void)
         return;
     }
 
-    bool want_shelly = st.shelly_heater.enabled && st.heater.enabled &&
-                       !fishduino_maintenance_mode_is_active();
-    fishduino_shelly_heater_apply_power(want_shelly);
+    fishduino_shelly_heater_apply_power(heater_shelly_power_allowed(&st));
 
     if (!st.heater.enabled) {
         return;

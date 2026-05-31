@@ -10,3 +10,6 @@ bool fishduino_shelly_address_valid(const char *addr, bool allow_empty);
 
 /** Fill buf with a short error message; returns false if valid. */
 bool fishduino_shelly_address_error(const char *addr, bool allow_empty, char *buf, size_t len);
+
+/** Returns true if enabled plug IPs collide (CO2/heater/filter). */
+bool fishduino_shelly_plugs_config_error(const fishduino_settings_t *settings, char *buf, size_t len);

@@ -157,6 +157,23 @@ static void btn_save_cb(lv_event_t *e)
         return;
     }
 
+    fishduino_settings_t preview = {0};
+    if (fishduino_settings_get_snapshot(&preview)) {
+        strncpy(preview.shelly_co2.ip, co2_ip != NULL ? co2_ip : "", sizeof(preview.shelly_co2.ip) - 1);
+        strncpy(preview.shelly_filter.ip, filter_ip != NULL ? filter_ip : "", sizeof(preview.shelly_filter.ip) - 1);
+        strncpy(preview.shelly_heater.ip, heater_ip != NULL ? heater_ip : "", sizeof(preview.shelly_heater.ip) - 1);
+        preview.shelly_co2.enabled = co2_en;
+        preview.shelly_filter.enabled = filter_en;
+        preview.shelly_heater.enabled = heater_en;
+        preview.shelly_co2.switch_id = s_co2_switch_id;
+        preview.shelly_filter.switch_id = s_filter_switch_id;
+        preview.shelly_heater.switch_id = s_heater_switch_id;
+        if (fishduino_shelly_plugs_config_error(&preview, err, sizeof(err))) {
+            lv_label_set_text(s_label_status, err);
+            return;
+        }
+    }
+
     shelly_save_ctx_t save = {0};
     fishduino_settings_t cur;
     if (!fishduino_settings_get_snapshot(&cur)) {

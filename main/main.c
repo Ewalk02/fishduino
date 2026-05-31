@@ -40,6 +40,8 @@
 #include "ota/ota_manager.h"
 #include "safety/co2_safety.h"
 #include "water/water_metrics.h"
+#include "fishduino_app.h"
+#include "net/dashboard_console.h"
 
 static const char *TAG = "fishduino";
 
@@ -57,6 +59,20 @@ typedef struct {
 } fishduino_app_t;
 
 static fishduino_app_t s_app;
+
+void fishduino_app_dashboard_inputs(fishduino_co2_t *co2, fishduino_feeder_t *feeder,
+                                    fishduino_settings_t *settings)
+{
+    if (settings != NULL) {
+        fishduino_settings_get_snapshot(settings);
+    }
+    if (co2 != NULL) {
+        *co2 = s_app.co2;
+    }
+    if (feeder != NULL) {
+        *feeder = s_app.feeder;
+    }
+}
 
 static void console_init(void)
 {
@@ -161,6 +177,7 @@ void app_main(void)
     fishduino_fluval_console_register();
     fishduino_safety_console_register();
     fishduino_status_console_register();
+    fishduino_dashboard_console_register();
     fishduino_heater_console_register();
     fishduino_maintenance_console_register();
     fishduino_ota_console_register();

@@ -149,6 +149,7 @@ Read-only: Fishduino never sends `Switch.Set` to the filter plug. Low-power alar
 | Command | Description |
 |---------|-------------|
 | `shelly` | CO2/filter status + active IPs |
+| `dashboard_status` | Print cockpit `dashboard_data` snapshot (headless UI validation) |
 | `shelly_co2_on` / `shelly_co2_off` | Test CO2 plug |
 | `shelly_filter` | Poll filter (read-only) |
 | `shelly_alarm` | Filter alert state |
@@ -245,7 +246,7 @@ Details: [`docs/water_logging.md`](docs/water_logging.md)
 
 ## OTA with rollback
 
-Custom partition table [`partitions.csv`](partitions.csv): `factory` + `ota_0` + `ota_1` (1.75 MB slots each) + `otadata`. Requires **16 MB** flash (`CONFIG_ESPTOOLPY_FLASHSIZE_16MB` in `sdkconfig.defaults`). After changing defaults, delete local `sdkconfig` and run `idf.py set-target esp32p4` so flash size is not stuck at 2 MB.
+Custom partition table [`partitions.csv`](partitions.csv): `factory` + `ota_0` + `ota_1` (**3 MB** app slots each), `otadata`, and a **64 KB** `waterlog` data partition for the water-test ring buffer. Requires **16 MB** flash (`CONFIG_ESPTOOLPY_FLASHSIZE_16MB` in `sdkconfig.defaults`). After changing defaults, delete local `sdkconfig` and run `idf.py set-target esp32p4` so flash size is not stuck at 2 MB.
 
 - `ota_status`, `ota_update <https_url>`, `ota_confirm_good` on serial console
 - Pre-reboot: CO2 forced off

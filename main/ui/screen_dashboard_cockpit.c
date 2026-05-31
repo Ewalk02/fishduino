@@ -468,9 +468,14 @@ static void update_temp_chart(fishduino_cockpit_handles_t *h, const dashboard_sn
 #define TEMP_GAUGE_MAX_F 90.0f
 #define TEMP_GAUGE_FALLBACK_SETPOINT_F 78.0f
 
+static bool gauge_setpoint_valid(const dashboard_snapshot_t *s)
+{
+    return s->heater_enabled && s->setpoint_f >= 50.0f && s->setpoint_f <= 95.0f;
+}
+
 static float gauge_display_setpoint_f(const dashboard_snapshot_t *s)
 {
-    if (!s->heater_enabled || s->setpoint_f < 50.0f || s->setpoint_f > 95.0f) {
+    if (!gauge_setpoint_valid(s)) {
         return TEMP_GAUGE_FALLBACK_SETPOINT_F;
     }
     return s->setpoint_f;
@@ -483,8 +488,14 @@ static void update_temp_gauge(fishduino_cockpit_handles_t *h, const dashboard_sn
     char st[24];
 
     float setpt = gauge_display_setpoint_f(s);
-    h->gauge_temp.min_val = TEMP_GAUGE_MIN_F;
-    h->gauge_temp.max_val = TEMP_GAUGE_MAX_F;
+    float min_val = TEMP_GAUGE_MIN_F;
+    float max_val = TEMP_GAUGE_MAX_F;
+    if (min_val >= max_val) {
+        min_val = 70.0f;
+        max_val = 90.0f;
+    }
+    h->gauge_temp.min_val = min_val;
+    h->gauge_temp.max_val = max_val;
     cockpit_gauge_set_scale_ticks(&h->gauge_temp, "70", "90");
 
     if (s->temp_valid) {
@@ -496,7 +507,11 @@ static void update_temp_gauge(fishduino_cockpit_handles_t *h, const dashboard_sn
     snprintf(st, sizeof(st), "%s", s->heater_state_text);
     cockpit_gauge_set_labels(&h->gauge_temp, val, sub, st);
 
-    cockpit_gauge_set_zones_linear(&h->gauge_temp, setpt - 0.5f, setpt + 0.5f);
+    if (gauge_setpoint_valid(s)) {
+        cockpit_gauge_set_zones_linear(&h->gauge_temp, s->setpoint_f - 0.5f, s->setpoint_f + 0.5f);
+    } else {
+        cockpit_gauge_set_zones_linear(&h->gauge_temp, setpt - 0.5f, setpt + 0.5f);
+    }
     if (s->heater_enabled && s->temp_valid) {
         cockpit_gauge_set_needle(&h->gauge_temp, s->temp_f, true);
     } else {
@@ -605,10 +620,10 @@ static void update_feeder_gauge(fishduino_cockpit_handles_t *h, const dashboard_
     }
 
     char sub[28];
-    if (!s->feeder_configured || !s->feeder_scheduled) {
-        snprintf(sub, sizeof(sub), "%s", s->next_feed_text);
-    } else {
+    if (s->next_feed_text[0] != '\0') {
         snprintf(sub, sizeof(sub), "NEXT %s", s->next_feed_text);
+    } else {
+        snprintf(sub, sizeof(sub), "NEXT --");
     }
 
     const char *status = "READY";
