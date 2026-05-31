@@ -11,6 +11,11 @@
 #include "screen_diagnostics.h"
 #include "screen_dashboard.h"
 #include "screen_options.h"
+#include "heater/heater_manager.h"
+#include "maintenance/maintenance_mode.h"
+#include "safety/co2_safety.h"
+#include "screen_heater_settings.h"
+#include "screen_maintenance.h"
 #include "shelly/shelly_manager.h"
 
 static void format_minutes(uint16_t min, char *buf, size_t len)
@@ -45,8 +50,12 @@ void fishduino_ui_init(fishduino_ui_t *ui)
     ui->label_fluval_summary = h.label_fluval_summary;
     ui->label_fluval_channels = h.label_fluval_channels;
     ui->label_wifi = h.label_wifi;
+    ui->label_heater = h.label_heater;
+    ui->label_maint = h.label_maint;
 
     fishduino_screen_options_build(ui->root);
+    fishduino_screen_heater_build(ui->root);
+    fishduino_screen_maintenance_build(ui->root);
 
     lv_screen_load(ui->root);
 }
@@ -113,7 +122,37 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
         } else {
             snprintf(buf, sizeof(buf), "CO2: %s", fishduino_co2_get_output(co2) ? "ON" : "OFF");
         }
+        if (ss.co2_block_reason != CO2_BLOCK_NONE && !ss.co2_desired_on) {
+            char block[96];
+            snprintf(block, sizeof(block), "  blocked: %s", fishduino_co2_safety_reason_text(ss.co2_block_reason));
+            strncat(buf, block, sizeof(buf) - strlen(buf) - 1);
+        }
         lv_label_set_text(ui->label_co2, buf);
+    }
+
+    if (ui->label_maint) {
+        if (fishduino_maintenance_mode_is_active()) {
+            char mb[64];
+            snprintf(mb, sizeof(mb), "MAINTENANCE MODE (%lld min left)",
+                     (long long)(fishduino_maintenance_mode_remaining_ms() / 60000LL));
+            lv_label_set_text(ui->label_maint, mb);
+            lv_obj_clear_flag(ui->label_maint, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_label_set_text(ui->label_maint, "");
+            lv_obj_add_flag(ui->label_maint, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    if (ui->label_heater) {
+        heater_status_t hs;
+        heater_manager_get_status(&hs);
+        if (!settings->heater.enabled) {
+            snprintf(buf, sizeof(buf), "Heater: disabled");
+        } else {
+            snprintf(buf, sizeof(buf), "Heater: %s %.1fF -> %.1fF %s", heater_manager_state_text(hs.state),
+                     (double)hs.reported_temp_f, (double)hs.target_temp_f, hs.stale ? "STALE" : "");
+        }
+        lv_label_set_text(ui->label_heater, buf);
     }
 
     if (ui->label_co2_detail && settings->shelly_co2.enabled) {

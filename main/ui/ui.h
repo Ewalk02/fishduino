@@ -17,6 +17,8 @@ typedef struct {
     lv_obj_t *label_fluval_summary;
     lv_obj_t *label_fluval_channels;
     lv_obj_t *label_wifi;
+    lv_obj_t *label_heater;
+    lv_obj_t *label_maint;
 } fishduino_ui_t;
 
 void fishduino_ui_init(fishduino_ui_t *ui);

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ble/ble_central_manager.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -183,7 +184,7 @@ static void handle_notify(struct os_mbuf *om)
     }
 }
 
-static int gap_event(struct ble_gap_event *event, void *arg)
+static int fluval_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
 
@@ -236,11 +237,13 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_ble.notify_cccd_handle = 0;
         s_ble.backoff_ms = 500;
         ESP_LOGI(TAG, "connected");
+        ble_central_manager_claim_connection(BLE_CENTRAL_DRV_FLUVAL, s_ble.conn_handle);
         ble_gattc_disc_all_svcs(s_ble.conn_handle, discover_svc_cb, NULL);
         return 0;
 
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGW(TAG, "disconnected reason=%d", event->disconnect.reason);
+        ble_central_manager_clear_connection(BLE_CENTRAL_DRV_FLUVAL);
         s_ble.connected = false;
         s_ble.subscribed = false;
         s_ble.conn_handle = BLE_HS_CONN_HANDLE_NONE;
@@ -391,8 +394,12 @@ static int scan_start(void)
     params.filter_duplicates = 1;
 
     s_ble.have_adv_target = false;
+    if (!ble_central_manager_request_session(BLE_CENTRAL_DRV_FLUVAL)) {
+        return BLE_HS_EBUSY;
+    }
+
     ESP_LOGI(TAG, "scanning for %s", s_ble.target_name);
-    return ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, gap_event, NULL);
+    return ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, ble_central_manager_gap_event, NULL);
 }
 
 static int connect_to_found(void)
@@ -412,7 +419,8 @@ static int connect_to_found(void)
     conn_params.min_ce_len = 0x0010;
     conn_params.max_ce_len = 0x0030;
 
-    return ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &s_ble.adv_addr, 30000, &conn_params, gap_event, NULL);
+    return ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &s_ble.adv_addr, 30000, &conn_params, ble_central_manager_gap_event,
+                           NULL);
 }
 
 static void update_stale(void)
@@ -497,8 +505,14 @@ static esp_err_t send_and_wait_ack_status(const uint8_t *data, size_t len, fluva
     return err;
 }
 
-static void pump_connect(void)
+static void fluval_ble_pump(void *arg)
 {
+    (void)arg;
+
+    if (!s_ble.ready || !s_ble.auto_connect) {
+        return;
+    }
+
     uint64_t now_us = esp_timer_get_time();
     if (now_us < s_ble.next_action_us) {
         return;
@@ -532,17 +546,24 @@ static void pump_connect(void)
     s_ble.next_action_us = now_us + (uint64_t)s_ble.backoff_ms * 1000ULL;
 }
 
+static void fluval_ble_tick_fn(void *arg);
+static void fluval_on_ble_sync(void *arg);
+
+static void fluval_ble_tick_fn(void *arg)
+{
+    (void)arg;
+    fluval_ble_pump(NULL);
+    update_stale();
+    maybe_poll_status();
+}
+
 static void ble_worker_task(void *arg)
 {
     (void)arg;
     ble_job_t job;
 
     while (true) {
-        pump_connect();
-        update_stale();
-        maybe_poll_status();
-
-        if (xQueueReceive(s_ble.job_queue, &job, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (xQueueReceive(s_ble.job_queue, &job, pdMS_TO_TICKS(100)) == pdTRUE) {
             if (job.type == BLE_JOB_STATUS) {
                 uint8_t query[FLUVAL_PROTOCOL_STATUS_QUERY_LEN];
                 size_t qlen = fluval_protocol_build_status_query(query, sizeof(query));
@@ -556,17 +577,9 @@ static void ble_worker_task(void *arg)
     }
 }
 
-static void ble_host_task(void *param)
+static void fluval_on_ble_sync(void *arg)
 {
-    (void)param;
-    nimble_port_run();
-    nimble_port_freertos_deinit();
-    vTaskDelete(NULL);
-}
-
-static void on_sync(void)
-{
-    ble_hs_id_infer_auto(0, NULL);
+    (void)arg;
     s_ble.auto_connect = true;
     s_ble.next_action_us = esp_timer_get_time();
 }
@@ -605,11 +618,43 @@ esp_err_t fishduino_fluval_ble_client_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    nimble_port_init();
-    ble_hs_cfg.sync_cb = on_sync;
-    nimble_port_freertos_init(ble_host_task);
+    esp_err_t err = ble_central_manager_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    static bool s_registered;
+    if (!s_registered) {
+        ble_central_driver_reg_t reg = {
+            .name = "fluval",
+            .priority = BLE_CENTRAL_PRIO_FLUVAL,
+            .enabled = false,
+            .gap_handler = fluval_gap_event,
+            .gap_arg = NULL,
+            .tick_fn = fluval_ble_tick_fn,
+            .tick_arg = NULL,
+            .on_sync_fn = fluval_on_ble_sync,
+            .on_sync_arg = NULL,
+        };
+        err = ble_central_manager_register(BLE_CENTRAL_DRV_FLUVAL, &reg);
+        if (err != ESP_OK) {
+            return err;
+        }
+        s_registered = true;
+    }
 
     s_ble.ready = true;
+    return ESP_OK;
+}
+
+void fishduino_fluval_ble_client_on_host_sync(void)
+{
+    fluval_on_ble_sync(NULL);
+}
+
+esp_err_t fishduino_fluval_ble_client_set_enabled(bool enabled)
+{
+    ble_central_manager_set_driver_enabled(BLE_CENTRAL_DRV_FLUVAL, enabled);
     return ESP_OK;
 }
 
@@ -617,6 +662,10 @@ esp_err_t fishduino_fluval_ble_client_start(void)
 {
     if (!s_ble.ready) {
         return ESP_ERR_INVALID_STATE;
+    }
+
+    if (ble_central_manager_is_ready()) {
+        fluval_on_ble_sync(NULL);
     }
 
     static bool worker_started;

@@ -6,6 +6,8 @@
 #include "screen_commissioning.h"
 #include "screen_diagnostics.h"
 #include "screen_fluval_settings.h"
+#include "screen_heater_settings.h"
+#include "screen_maintenance.h"
 #include "screen_shelly_settings.h"
 #include "screen_wifi_settings.h"
 #include "shelly/shelly_manager.h"
@@ -21,7 +23,8 @@ static bool is_overlay(lv_obj_t *child)
     return child == s_options_screen || child == fishduino_screen_wifi_root() ||
            child == fishduino_screen_shelly_root() || child == fishduino_screen_co2_schedule_root() ||
            child == fishduino_screen_commissioning_root() || child == fishduino_screen_diagnostics_root() ||
-           child == fishduino_screen_fluval_root();
+           child == fishduino_screen_fluval_root() || child == fishduino_screen_heater_root() ||
+           child == fishduino_screen_maintenance_root();
 }
 
 static void set_dashboard_visible(bool visible)
@@ -51,6 +54,8 @@ static void hide_all_overlays(void)
     fishduino_screen_commissioning_hide();
     fishduino_screen_diagnostics_hide();
     fishduino_screen_fluval_hide();
+    fishduino_screen_heater_hide();
+    fishduino_screen_maintenance_hide();
 }
 
 static void hide_options(void)
@@ -120,6 +125,18 @@ static void btn_fluval_cb(lv_event_t *e)
 {
     (void)e;
     fishduino_screen_fluval_show();
+}
+
+static void btn_heater_cb(lv_event_t *e)
+{
+    (void)e;
+    fishduino_screen_heater_show();
+}
+
+static void btn_maint_cb(lv_event_t *e)
+{
+    (void)e;
+    fishduino_screen_maintenance_show();
 }
 
 static void btn_filter_cal_cb(lv_event_t *e)
@@ -229,9 +246,21 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     lv_label_set_text(lv_label_create(btn_fluval), "Fluval Settings");
     lv_obj_add_event_cb(btn_fluval, btn_fluval_cb, LV_EVENT_CLICKED, NULL);
 
+    lv_obj_t *btn_heater = lv_btn_create(h.screen);
+    lv_obj_set_size(btn_heater, 200, 32);
+    lv_obj_align(btn_heater, LV_ALIGN_TOP_LEFT, 8, 248);
+    lv_label_set_text(lv_label_create(btn_heater), "Heater");
+    lv_obj_add_event_cb(btn_heater, btn_heater_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *btn_maint = lv_btn_create(h.screen);
+    lv_obj_set_size(btn_maint, 200, 32);
+    lv_obj_align(btn_maint, LV_ALIGN_TOP_LEFT, 220, 248);
+    lv_label_set_text(lv_label_create(btn_maint), "Maintenance");
+    lv_obj_add_event_cb(btn_maint, btn_maint_cb, LV_EVENT_CLICKED, NULL);
+
     lv_obj_t *tz_lbl = lv_label_create(h.screen);
     lv_label_set_text(tz_lbl, "Timezone:");
-    lv_obj_align(tz_lbl, LV_ALIGN_TOP_LEFT, 8, 248);
+    lv_obj_align(tz_lbl, LV_ALIGN_TOP_LEFT, 8, 288);
 
     const struct {
         const char *name;
@@ -246,7 +275,7 @@ fishduino_options_handles_t fishduino_screen_options_build(lv_obj_t *parent)
     for (int i = 0; i < 4; i++) {
         lv_obj_t *btn = lv_btn_create(h.screen);
         lv_obj_set_size(btn, 100, 28);
-        lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 8 + (i % 2) * 108, 268 + (i / 2) * 32);
+        lv_obj_align(btn, LV_ALIGN_TOP_LEFT, 8 + (i % 2) * 108, 308 + (i / 2) * 32);
         lv_label_set_text(lv_label_create(btn), zones[i].name);
         lv_obj_add_event_cb(btn, set_tz_cb, LV_EVENT_CLICKED, (void *)(intptr_t)zones[i].tz);
     }

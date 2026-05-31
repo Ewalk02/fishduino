@@ -28,6 +28,8 @@ typedef struct {
 esp_err_t fishduino_fluval_ble_client_init(void);
 esp_err_t fishduino_fluval_ble_client_start(void);
 esp_err_t fishduino_fluval_ble_client_set_config(const fishduino_fluval_ble_client_config_t *cfg);
+esp_err_t fishduino_fluval_ble_client_set_enabled(bool enabled);
+void fishduino_fluval_ble_client_on_host_sync(void);
 
 bool fishduino_fluval_ble_client_is_connected(void);
 

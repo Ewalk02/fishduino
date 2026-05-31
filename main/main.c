@@ -28,9 +28,18 @@
 #include "scheduler/scheduler.h"
 #include "shelly/shelly_manager.h"
 #include "storage/settings_runtime.h"
+#include "ble/ble_central_manager.h"
+#include "heater/heater_manager.h"
+#include "maintenance/maintenance_mode.h"
+#include "ota/ota_manager.h"
+#include "safety/co2_safety.h"
 #include "ui/ui.h"
 
 static const char *TAG = "fishduino";
+
+void fishduino_heater_console_register(void);
+void fishduino_maintenance_console_register(void);
+void fishduino_ota_console_register(void);
 
 typedef struct {
     fishduino_settings_t settings;
@@ -98,7 +107,11 @@ static void scheduler_tick(const fishduino_time_snapshot_t *now, void *ctx)
     fishduino_shelly_co2_tick(&app->co2, now);
     fishduino_shelly_filter_alarm_tick();
     fishduino_feeder_tick(&app->feeder, now);
+    fishduino_maintenance_mode_tick();
+    ble_central_manager_tick();
+    heater_manager_tick();
     fishduino_fluval_tick();
+    fishduino_ota_manager_tick();
 
     if (app->ui == NULL) {
         return;
@@ -118,12 +131,16 @@ void app_main(void)
 
     fishduino_settings_runtime_init();
     fishduino_settings_get_snapshot(&s_app.settings);
+    fishduino_co2_safety_init();
+    fishduino_maintenance_mode_init();
+    fishduino_ota_manager_init();
     fishduino_time_sync_init();
     fishduino_time_sync_apply_timezone(&s_app.settings);
 
     fishduino_co2_init(&s_app.co2, &s_app.settings);
     fishduino_feeder_init(&s_app.feeder, &s_app.settings);
     fishduino_shelly_manager_init();
+    heater_manager_init();
     fishduino_fluval_init();
 
     console_init();
@@ -131,6 +148,9 @@ void app_main(void)
     fishduino_fluval_console_register();
     fishduino_safety_console_register();
     fishduino_status_console_register();
+    fishduino_heater_console_register();
+    fishduino_maintenance_console_register();
+    fishduino_ota_console_register();
     xTaskCreate(repl_task, "console", 4096, NULL, 3, NULL);
 
     ESP_LOGI(TAG, "Init display + touch + LVGL (BSP)");
@@ -156,4 +176,8 @@ void app_main(void)
     }
 
     fishduino_fluval_start();
+
+    if (fishduino_ota_confirm_good() == ESP_OK) {
+        ESP_LOGI(TAG, "OTA health: app marked valid");
+    }
 }

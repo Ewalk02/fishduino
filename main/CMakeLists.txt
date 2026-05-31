@@ -15,7 +15,17 @@ set(fishduino_srcs
   "net/shelly_console.c"
   "net/safety_console.c"
   "net/status_console.c"
+  "net/heater_console.c"
+  "net/maintenance_console.c"
+  "net/ota_console.c"
   "shelly/shelly_manager.c"
+  "safety/co2_safety.c"
+  "maintenance/maintenance_mode.c"
+  "ota/ota_manager.c"
+  "ble/ble_central_manager.c"
+  "heater/chihiros_ble_client.c"
+  "heater/heater_manager.c"
+  "heater/heater_safety.c"
   "fluval/fluval_protocol.c"
   "fluval/fluval_transport.c"
   "fluval/fluval_stub_transport.c"
@@ -31,6 +41,8 @@ set(fishduino_srcs
   "ui/screen_commissioning.c"
   "ui/screen_diagnostics.c"
   "ui/screen_fluval_settings.c"
+  "ui/screen_heater_settings.c"
+  "ui/screen_maintenance.c"
 )
 
 set(fishduino_requires
@@ -39,12 +51,16 @@ set(fishduino_requires
   esp_event
   esp_timer
   esp_http_client
+  esp_https_ota
+  app_update
   json
   lwip
   nvs_flash
   console
   driver
   freertos
+  chihiros_heater_protocol
+  mbedtls
 )
 
 set(fishduino_priv_requires "")

@@ -1,9 +1,11 @@
 #include "safety_console.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "esp_console.h"
 #include "esp_log.h"
+#include "safety/co2_safety.h"
 #include "shelly/shelly_manager.h"
 #include "storage/settings_runtime.h"
 
@@ -64,6 +66,17 @@ static int cmd_filter_calibrate(int argc, char **argv)
     return 0;
 }
 
+static int cmd_co2_override(int argc, char **argv)
+{
+    uint32_t min = 15;
+    if (argc >= 2) {
+        min = (uint32_t)atoi(argv[1]);
+    }
+    fishduino_co2_safety_override_start(min);
+    printf("DANGEROUS: CO2 safety override for %u min\n", (unsigned)min);
+    return 0;
+}
+
 void fishduino_safety_console_register(void)
 {
     const esp_console_cmd_t safety = {
@@ -80,5 +93,12 @@ void fishduino_safety_console_register(void)
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&cal));
 
-    ESP_LOGI(TAG, "Console: safety_test, filter_calibrate");
+    const esp_console_cmd_t ovr = {
+        .command = "co2_override_on",
+        .help = "DANGEROUS: bypass CO2 interlock (minutes, default 15)",
+        .func = &cmd_co2_override,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&ovr));
+
+    ESP_LOGI(TAG, "Console: safety_test, filter_calibrate, co2_override_on");
 }
