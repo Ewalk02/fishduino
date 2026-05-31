@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "co2/co2_gpio.h"
 #include "feeder/feeder_actuator.h"
@@ -11,7 +12,19 @@
 #include "screen_diagnostics.h"
 #include "screen_dashboard.h"
 #include "screen_options.h"
+#include "heater/heater_manager.h"
+#include "maint_tracker/maint_tracker.h"
+#include "maintenance/maintenance_mode.h"
+#include "safety/co2_safety.h"
+#include "screen_heater_settings.h"
+#include "screen_maintenance.h"
+#include "screen_maint_tracker.h"
+#include "screen_water_entry.h"
+#include "screen_water_history.h"
+#include "screen_water_tests.h"
 #include "shelly/shelly_manager.h"
+#include "water/water_alerts.h"
+#include "water/water_metrics.h"
 
 static void format_minutes(uint16_t min, char *buf, size_t len)
 {
@@ -45,8 +58,18 @@ void fishduino_ui_init(fishduino_ui_t *ui)
     ui->label_fluval_summary = h.label_fluval_summary;
     ui->label_fluval_channels = h.label_fluval_channels;
     ui->label_wifi = h.label_wifi;
+    ui->label_heater = h.label_heater;
+    ui->label_maint = h.label_maint;
+    ui->label_water = h.label_water;
+    ui->label_maint_tasks = h.label_maint_tasks;
 
     fishduino_screen_options_build(ui->root);
+    fishduino_screen_heater_build(ui->root);
+    fishduino_screen_maintenance_build(ui->root);
+    fishduino_screen_water_tests_build(ui->root);
+    fishduino_screen_water_entry_build(ui->root);
+    fishduino_screen_water_history_build(ui->root);
+    fishduino_screen_maint_tracker_build(ui->root);
 
     lv_screen_load(ui->root);
 }
@@ -113,7 +136,94 @@ void fishduino_ui_update(fishduino_ui_t *ui, const fishduino_co2_t *co2,
         } else {
             snprintf(buf, sizeof(buf), "CO2: %s", fishduino_co2_get_output(co2) ? "ON" : "OFF");
         }
+        if (ss.co2_block_reason != CO2_BLOCK_NONE && !ss.co2_desired_on) {
+            char block[96];
+            snprintf(block, sizeof(block), "  blocked: %s", fishduino_co2_safety_reason_text(ss.co2_block_reason));
+            strncat(buf, block, sizeof(buf) - strlen(buf) - 1);
+        }
         lv_label_set_text(ui->label_co2, buf);
+    }
+
+    if (ui->label_maint) {
+        if (fishduino_maintenance_mode_is_active()) {
+            char mb[64];
+            snprintf(mb, sizeof(mb), "MAINTENANCE MODE (%lld min left)",
+                     (long long)(fishduino_maintenance_mode_remaining_ms() / 60000LL));
+            lv_label_set_text(ui->label_maint, mb);
+            lv_obj_clear_flag(ui->label_maint, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_label_set_text(ui->label_maint, "");
+            lv_obj_add_flag(ui->label_maint, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    if (ui->label_heater) {
+        heater_status_t hs;
+        heater_manager_get_status(&hs);
+        if (!settings->heater.enabled) {
+            snprintf(buf, sizeof(buf), "Heater: disabled");
+        } else {
+            snprintf(buf, sizeof(buf), "Heater: %s %.1fF -> %.1fF %s", heater_manager_state_text(hs.state),
+                     (double)hs.reported_temp_f, (double)hs.target_temp_f, hs.stale ? "STALE" : "");
+        }
+        lv_label_set_text(ui->label_heater, buf);
+    }
+
+    if (ui->label_water) {
+        water_test_entry_t we;
+        if (water_metrics_get_latest(&we) != ESP_OK) {
+            lv_label_set_text(ui->label_water, "Water: no tests yet");
+        } else {
+            char date[16] = "unknown";
+            if (we.timestamp_unix > 0 && !(we.valid_flags & WATER_FLAG_TIME_UNKNOWN)) {
+                struct tm tm_local;
+                time_t t = (time_t)we.timestamp_unix;
+                if (localtime_r(&t, &tm_local) != NULL) {
+                    strftime(date, sizeof(date), "%Y-%m-%d", &tm_local);
+                }
+            }
+            snprintf(buf, sizeof(buf), "pH %.1f | NH3 %.1f | NO2 %.1f | NO3 %.0f | Last: %s",
+                     (we.valid_flags & WATER_VALID_PH) ? (double)we.ph : 0.0,
+                     (we.valid_flags & WATER_VALID_AMMONIA) ? (double)we.ammonia_ppm : 0.0,
+                     (we.valid_flags & WATER_VALID_NITRITE) ? (double)we.nitrite_ppm : 0.0,
+                     (we.valid_flags & WATER_VALID_NITRATE) ? (double)we.nitrate_ppm : 0.0, date);
+            lv_label_set_text(ui->label_water, buf);
+        }
+    }
+
+    if (ui->label_maint_tasks) {
+        maintenance_task_t due[MAINT_TASK_COUNT];
+        size_t due_count = 0;
+        maintenance_tracker_get_due_tasks(due, MAINT_TASK_COUNT, &due_count);
+        if (due_count == 0) {
+            lv_label_set_text(ui->label_maint_tasks, "");
+            lv_obj_add_flag(ui->label_maint_tasks, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            maintenance_tracker_status_t worst = MAINT_TRACKER_STATUS_DUE;
+            const maintenance_task_t *show = &due[0];
+            for (size_t i = 0; i < due_count; i++) {
+                maintenance_tracker_status_t st = maintenance_tracker_task_status(&due[i]);
+                if (st == MAINT_TRACKER_STATUS_OVERDUE) {
+                    worst = MAINT_TRACKER_STATUS_OVERDUE;
+                    show = &due[i];
+                    break;
+                }
+            }
+            if (due_count > 1) {
+                snprintf(buf, sizeof(buf), "Reminders: %zu due (%s%s)", due_count, show->name,
+                         worst == MAINT_TRACKER_STATUS_OVERDUE ? " OVERDUE" : "");
+            } else {
+                snprintf(buf, sizeof(buf), "Reminder: %s (%s)", show->name,
+                         maintenance_tracker_status_text(maintenance_tracker_task_status(show)));
+            }
+            lv_label_set_text(ui->label_maint_tasks, buf);
+            if (worst == MAINT_TRACKER_STATUS_OVERDUE) {
+                lv_obj_set_style_text_color(ui->label_maint_tasks, lv_palette_main(LV_PALETTE_RED), 0);
+            } else {
+                lv_obj_set_style_text_color(ui->label_maint_tasks, lv_palette_main(LV_PALETTE_ORANGE), 0);
+            }
+            lv_obj_clear_flag(ui->label_maint_tasks, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     if (ui->label_co2_detail && settings->shelly_co2.enabled) {

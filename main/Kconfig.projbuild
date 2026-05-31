@@ -36,4 +36,13 @@ menu "Fishduino Configuration"
         help
             Build hosted NimBLE Fluval transport (requires ESP-Hosted BT on C6).
 
+    config FISHDUINO_HEADLESS
+        bool "Headless mode (skip display/touch/LVGL)"
+        default n
+        help
+            Skip MIPI DSI display, touch, and LVGL UI initialization.
+            Console, water metrics, maintenance tracker, Shelly/CO2,
+            Wi-Fi, and BLE backends still run. Use when the DSI panel
+            is not connected.
+
 endmenu

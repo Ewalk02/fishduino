@@ -5,6 +5,7 @@
 
 #include "co2/co2_schedule.h"
 #include "net/shelly_client.h"
+#include "safety/co2_safety.h"
 #include "scheduler/scheduler.h"
 #include "storage/settings_nvs.h"
 
@@ -34,6 +35,7 @@ typedef struct {
     uint16_t co2_manual_last_seen_min;
     bool filter_calibrating;
     uint8_t filter_calibrate_progress_s;
+    co2_safety_reason_t co2_block_reason;
 } fishduino_shelly_state_t;
 
 void fishduino_shelly_manager_init(void);

@@ -106,6 +106,31 @@ fishduino_dashboard_handles_t fishduino_screen_dashboard_build(lv_obj_t *parent)
     lv_obj_set_width(h.label_wifi, 440);
     lv_obj_align(h.label_wifi, LV_ALIGN_TOP_LEFT, 12, 286);
 
+    h.label_heater = lv_label_create(parent);
+    lv_label_set_text(h.label_heater, "Heater: --");
+    lv_obj_set_width(h.label_heater, 440);
+    lv_obj_align(h.label_heater, LV_ALIGN_TOP_LEFT, 12, 308);
+
+    h.label_water = lv_label_create(parent);
+    lv_label_set_text(h.label_water, "Water: --");
+    lv_obj_set_width(h.label_water, 440);
+    lv_obj_align(h.label_water, LV_ALIGN_TOP_LEFT, 12, 330);
+
+    h.label_maint_tasks = lv_label_create(parent);
+    lv_label_set_text(h.label_maint_tasks, "");
+    lv_obj_set_width(h.label_maint_tasks, 440);
+    lv_obj_set_style_text_color(h.label_maint_tasks, lv_palette_main(LV_PALETTE_ORANGE), 0);
+    lv_obj_align(h.label_maint_tasks, LV_ALIGN_TOP_LEFT, 12, 352);
+    lv_obj_add_flag(h.label_maint_tasks, LV_OBJ_FLAG_HIDDEN);
+
+    h.label_maint = lv_label_create(parent);
+    lv_label_set_text(h.label_maint, "");
+    lv_obj_set_style_text_color(h.label_maint, lv_palette_main(LV_PALETTE_ORANGE), 0);
+    lv_obj_set_width(h.label_maint, 440);
+    lv_obj_set_style_text_align(h.label_maint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(h.label_maint, LV_ALIGN_TOP_MID, 0, 78);
+    lv_obj_add_flag(h.label_maint, LV_OBJ_FLAG_HIDDEN);
+
     h.btn_fluval_auto = lv_btn_create(parent);
     lv_obj_set_size(h.btn_fluval_auto, 90, 32);
     lv_obj_align(h.btn_fluval_auto, LV_ALIGN_BOTTOM_LEFT, 12, -96);

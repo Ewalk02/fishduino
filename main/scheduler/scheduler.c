@@ -1,5 +1,6 @@
 #include "scheduler.h"
 
+#include <string.h>
 #include <time.h>
 
 #include "esp_log.h"
@@ -7,6 +8,23 @@
 #include "freertos/task.h"
 
 static const char *TAG = "scheduler";
+
+void fishduino_time_snapshot_now(fishduino_time_snapshot_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+
+    memset(out, 0, sizeof(*out));
+    time_t t = time(NULL);
+    out->epoch_seconds = (uint32_t)(t > 0 ? t : 0);
+
+    struct tm local_tm;
+    if (t > 100000 && localtime_r(&t, &local_tm) != NULL) {
+        out->valid_time = true;
+        out->minutes_since_midnight = (uint16_t)(local_tm.tm_hour * 60 + local_tm.tm_min);
+    }
+}
 
 typedef struct {
     fishduino_scheduler_tick_fn cb;
@@ -18,19 +36,8 @@ static void scheduler_task(void *arg)
     scheduler_state_t *st = (scheduler_state_t *)arg;
 
     while (true) {
-        fishduino_time_snapshot_t now = {0};
-
-        time_t t = time(NULL);
-        now.epoch_seconds = (uint32_t)(t > 0 ? t : 0);
-
-        struct tm local_tm;
-        if (t > 100000 && localtime_r(&t, &local_tm) != NULL) {
-            now.valid_time = true;
-            now.minutes_since_midnight = (uint16_t)(local_tm.tm_hour * 60 + local_tm.tm_min);
-        } else {
-            now.valid_time = false;
-            now.minutes_since_midnight = 0;
-        }
+        fishduino_time_snapshot_t now;
+        fishduino_time_snapshot_now(&now);
 
         st->cb(&now, st->ctx);
 

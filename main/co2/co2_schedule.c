@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "co2_gpio.h"
+#include "safety/co2_safety.h"
+#include "scheduler/scheduler.h"
 #include "storage/settings_nvs.h"
 
 bool fishduino_co2_in_schedule_window(uint16_t now_min, uint16_t on_min, uint16_t off_min)
@@ -46,6 +48,9 @@ void fishduino_co2_apply_settings(fishduino_co2_t *co2, const fishduino_settings
 void fishduino_co2_tick(fishduino_co2_t *co2, const fishduino_time_snapshot_t *now)
 {
     bool target = fishduino_co2_get_target(co2, now);
+    co2_safety_reason_t reason = CO2_BLOCK_NONE;
+    target = fishduino_co2_safety_effective_desired_on(target, &reason);
+    (void)reason;
 
     if (co2->settings.shelly_co2.enabled) {
         co2->output_on = target;

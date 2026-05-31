@@ -233,6 +233,7 @@ static esp_err_t ble_transport_start(void *ctx)
     if (err != ESP_OK) {
         return err;
     }
+    fishduino_fluval_ble_client_set_enabled(true);
 
     s_ble_tr.started = true;
     BaseType_t ok = xTaskCreate(pump_task, "fluval_ble_tr", 3072, NULL, 4, &s_ble_tr.pump_task);
@@ -246,6 +247,7 @@ static esp_err_t ble_transport_start(void *ctx)
 static esp_err_t ble_transport_stop(void *ctx)
 {
     (void)ctx;
+    fishduino_fluval_ble_client_set_enabled(false);
     s_ble_tr.started = false;
     while (s_ble_tr.pump_task != NULL) {
         vTaskDelay(pdMS_TO_TICKS(50));

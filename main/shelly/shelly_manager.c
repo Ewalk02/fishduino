@@ -13,6 +13,8 @@
 #include "net/time_sync.h"
 #include "net/wifi_manager.h"
 #include "shelly/shelly_config.h"
+#include "maintenance/maintenance_mode.h"
+#include "safety/co2_safety.h"
 #include "storage/settings_runtime.h"
 
 static const char *TAG = "shelly_mgr";
@@ -104,6 +106,11 @@ static void update_filter_alarm(const fishduino_settings_t *settings)
         return;
     }
 
+    if (fishduino_maintenance_mode_suppress_filter_alarms()) {
+        s_state.filter_alarm = FISHDUINO_FILTER_ALARM_NONE;
+        return;
+    }
+
     if (fs->online && fs->output) {
         s_state.filter_output_off_alert = false;
     } else if (fs->online && !fs->output) {
@@ -192,6 +199,19 @@ static bool execute_co2_set(const fishduino_settings_t *settings, bool on)
         return false;
     }
 
+    co2_safety_reason_t reason = CO2_BLOCK_NONE;
+    if (on && !fishduino_co2_safety_allows_on(&reason)) {
+        ESP_LOGW(TAG, "CO2 ON blocked: %s", fishduino_co2_safety_reason_text(reason));
+        on = false;
+        state_lock();
+        s_state.co2_block_reason = reason;
+        state_unlock();
+    } else if (on) {
+        state_lock();
+        s_state.co2_block_reason = CO2_BLOCK_NONE;
+        state_unlock();
+    }
+
     uint32_t last_cmd_ms;
     state_lock();
     last_cmd_ms = s_state.last_co2_command_ms;
@@ -202,6 +222,11 @@ static bool execute_co2_set(const fishduino_settings_t *settings, bool on)
     }
 
     if (!fishduino_shelly_co2_set_output(settings, on)) {
+        if (on) {
+            state_lock();
+            s_state.co2_block_reason = CO2_BLOCK_CO2_COMMAND_FAILED;
+            state_unlock();
+        }
         return false;
     }
 
@@ -530,13 +555,17 @@ void fishduino_shelly_co2_tick(fishduino_co2_t *co2, const fishduino_time_snapsh
     clear_manual_at_schedule_transition(co2, now);
 
     bool target = fishduino_co2_get_target(co2, now);
+    co2_safety_reason_t reason = CO2_BLOCK_NONE;
+    target = fishduino_co2_safety_effective_desired_on(target, &reason);
 
     state_lock();
     s_state.co2_desired_on = target;
+    s_state.co2_block_reason = reason;
     s_state.co2_waiting_time = !now->valid_time;
     if (!now->valid_time) {
         target = false;
         s_state.co2_desired_on = false;
+        s_state.co2_block_reason = CO2_BLOCK_NO_TIME_SYNC;
     }
 
     if (!fishduino_co2_gpio_is_configured() || settings.shelly_co2.enabled) {

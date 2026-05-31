@@ -51,6 +51,16 @@ typedef enum {
 
 typedef struct {
     bool enabled;
+    char name_prefix[8];
+    float target_temp_f;
+    float min_temp_f;
+    float max_temp_f;
+    float max_over_target_f;
+    uint16_t stale_timeout_s;
+} fishduino_heater_settings_t;
+
+typedef struct {
+    bool enabled;
     fishduino_fluval_transport_mode_t transport_mode;
     char target_name[FISHDUINO_FLUVAL_NAME_LEN];
     char target_mac[FISHDUINO_FLUVAL_MAC_LEN];
@@ -70,6 +80,7 @@ typedef struct {
     fishduino_timezone_t timezone;
     float filter_baseline_watts; /**< 0 = uncalibrated */
     fishduino_fluval_settings_t fluval;
+    fishduino_heater_settings_t heater;
 } fishduino_settings_t;
 
 const char *fishduino_timezone_name(fishduino_timezone_t tz);

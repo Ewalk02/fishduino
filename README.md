@@ -64,6 +64,31 @@ idf.py set-target esp32p4
 idf.py build
 ```
 
+## Headless mode (no DSI panel)
+
+Use when the MIPI DSI display is **not connected** and you want to test serial console / backend features (`water_add`, `maint_list`, Shelly, etc.) without the display init hang.
+
+**Enable** (either method):
+
+1. `idf.py menuconfig` → **Fishduino Configuration** → **Headless mode (skip display/touch/LVGL)** → enable
+2. Uncomment in `sdkconfig.defaults`:
+   ```text
+   CONFIG_FISHDUINO_HEADLESS=y
+   ```
+
+Then regenerate config and build:
+
+```bash
+rm -f sdkconfig
+idf.py set-target esp32p4
+idf.py build
+idf.py -p /dev/ttyACM0 flash monitor
+```
+
+On boot you should see: `Headless mode enabled: skipping display/touch/LVGL init` and the `fishduino>` prompt.
+
+**Disable:** turn off in menuconfig or re-comment the line in `sdkconfig.defaults`, then `rm -f sdkconfig`, `idf.py set-target esp32p4`, and rebuild. Normal builds initialize the touchscreen UI when headless is off (default).
+
 ## Flash and monitor
 
 ```bash
@@ -137,8 +162,14 @@ Read-only: Fishduino never sends `Switch.Set` to the filter plug. Low-power alar
 | `fluval_setall <0-100>` | Set all Fluval channels |
 | `fluval_set <p> <b> <cw> <w> <ww>` | Set Fluval channels |
 | `safety_test` | Commissioning checklist |
+| `heater_status` / `heater_set` / `heater_enable` | Chihiros heater |
+| `maintenance_start` / `maintenance_end` / `maintenance_status` | Maintenance Mode |
+| `ota_status` / `ota_update` / `ota_confirm_good` | OTA |
+| `co2_override_on` | Dangerous CO2 override (expires) |
+| `water_add` / `water_latest` / `water_list` / `water_clear_confirm` | Water test log |
+| `maint_list` / `maint_due` / `maint_done` / `maint_snooze` | Maintenance reminders |
 
-Touch **CO2 ON / OFF / AUTO** on the dashboard for manual override.
+Touch **CO2 ON / OFF / AUTO** on the dashboard for manual override. If CO2 is blocked by the interlock, the dashboard shows the reason.
 
 ## Display / touch
 
@@ -148,18 +179,101 @@ Waveshare BSP `waveshare/esp32_p4_platform` (see `idf_component.yml`). Color for
 
 GPIO assignments in `main/hardware_pins.h`.
 
-## Chihiros heater (future)
+## Architecture (single P4 firmware)
 
-Planned BLE integration via ESP32-C6; not in this firmware yet.
+Production ships **one** image on the ESP32-P4. The onboard ESP32-C6 runs **ESP-Hosted slave** (Wi-Fi remote + NimBLE HCI only). Policy, UI, Shelly HTTP, CO2 interlock, maintenance, OTA, Fluval, and Chihiros all live under `main/`.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ ESP32-P4 Fishduino                                          │
+│  LVGL UI → policy (CO2, maintenance, heater, OTA)           │
+│         → Shelly HTTP (Wi-Fi via hosted)                    │
+│         → ble_central_manager → Fluval / Chihiros drivers   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ ESP-Hosted (SDIO)
+┌───────────────────────────▼─────────────────────────────────┐
+│ ESP32-C6 coprocessor — Wi-Fi + NimBLE VHCI controller       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Layer | Modules | Must not |
+|-------|---------|----------|
+| UI | `main/ui/` | Direct BLE/HTTP |
+| Policy | `co2_safety`, `maintenance_mode`, `heater_manager`, `ota_manager` | GATT/scan |
+| BLE | `ble_central_manager`, `fluval_ble_client`, `chihiros_ble_client` | Duplicate `nimble_port_init` |
+| Protocol | `chihiros_heater_protocol`, Fluval hex commands | Safety policy |
+
+**Future fallback only:** UART to an external C6 running `apps/chihiros_heater_c6/` or `tools/fluval_ble_helper/` — not used on the onboard coprocessor.
+
+Details: [`docs/chihiros_ble.md`](docs/chihiros_ble.md)
+
+## CO2 safety interlock
+
+CO2 solenoid ON is gated by `main/safety/co2_safety.c` everywhere: Shelly tick, manual UI, GPIO fallback, schedule, and boot restore.
+
+CO2 stays **OFF** when:
+
+- Filter baseline not calibrated (`filter_baseline_watts == 0`)
+- Filter monitor offline or stale
+- Filter plug output off or below running threshold (with hysteresis)
+- **Maintenance Mode** active
+
+The dashboard shows `CO2 blocked: <reason>` when blocked. Filter plug remains **read-only** (no `Switch.Set` to filter IP).
+
+Dangerous override (auto-expires): serial `co2_override_on <minutes>`.
+
+## Maintenance Mode
+
+**OPTIONS → Maintenance** (15 / 30 / 60 min) or serial `maintenance_start <min>` / `maintenance_end` / `maintenance_status`.
+
+- Persists end time in NVS; turns CO2 off on start
+- Suppresses non-critical filter OFF / LOW_POWER alarms
+- **Does not** suppress heater over-temp
+
+## Water test logging and reminders
+
+Manual entry of pH, ammonia, nitrite, nitrate (and optional notes). **Not** auto-sensed.
+
+- **OPTIONS → Water Tests** — add entry, view history/chart, latest on dashboard
+- **OPTIONS → Reminders** — recurring tasks (filter rinse, water tests, etc.)
+- Storage: flash ring buffer (`waterlog` partition), 200 entries, oldest dropped when full
+- Saving a water test marks **Check water parameters** done (+14 days)
+
+Distinct from **Maintenance Mode** above (temporary CO2-off).
+
+Details: [`docs/water_logging.md`](docs/water_logging.md)
+
+## OTA with rollback
+
+Custom partition table [`partitions.csv`](partitions.csv): `factory` + `ota_0` + `ota_1` (1.75 MB slots each) + `otadata`. Requires **16 MB** flash (`CONFIG_ESPTOOLPY_FLASHSIZE_16MB` in `sdkconfig.defaults`). After changing defaults, delete local `sdkconfig` and run `idf.py set-target esp32p4` so flash size is not stuck at 2 MB.
+
+- `ota_status`, `ota_update <https_url>`, `ota_confirm_good` on serial console
+- Pre-reboot: CO2 forced off
+- Pending firmware is confirmed with `esp_ota_mark_app_valid_cancel_rollback()` after health window (~45 s)
+
+Build version string: `FISHDUINO_BUILD_VERSION` in `main/fishduino_version.h`.
+
+## Chihiros aquarium heater
+
+Integrated on P4 via hosted NimBLE (NUS, `DYH1*` name prefix). Enable under **OPTIONS → Heater**. Policy fail-safe uses minimum setpoint when unsafe (no dedicated OFF packet in protocol).
+
+| Command | Description |
+|---------|-------------|
+| `heater_status` | BLE link, temp, target, alarms |
+| `heater_set <temp_F>` | Set target °F |
+| `heater_enable 0\|1` | Enable integration |
+
+Lab/reference firmware (not production): [`apps/chihiros_heater_c6/`](apps/chihiros_heater_c6/)
 
 ## Fluval Plant 4.0 light
 
-Fishduino can monitor and control a Fluval Plant 4.0 aquarium light over a UART-connected BLE helper (ESP32-C3/S3/C6). The ESP32-P4 firmware does not talk BLE directly; it sends simple text commands to a helper that owns the GATT session.
+Primary path: P4 NimBLE central → onboard C6 → Fluval BLE (no UART required).
 
-BLE helper firmware: [`tools/fluval_ble_helper/README.md`](tools/fluval_ble_helper/README.md)
+Optional UART fallback: [`tools/fluval_ble_helper/README.md`](tools/fluval_ble_helper/README.md)
 
 ```text
-Fishduino ESP32-P4  --UART-->  BLE helper  --BLE-->  Fluval Plant 4.0
+Fishduino ESP32-P4  --ESP-Hosted BLE-->  Fluval Plant 4.0
+Fishduino ESP32-P4  --UART (fallback)-->  BLE helper  --BLE-->  Fluval
 ```
 
 ### BLE protocol (helper-side)
@@ -191,15 +305,9 @@ Status responses start with `d2b0000e01<mode>02f5...` where mode `00` = Manual, 
 - Dashboard display and basic controls
 - Serial console commands
 
-### Architecture
+### Fluval BLE path
 
-Primary path (ESP32-P4 Fishduino):
-
-```text
-Fishduino app → ESP-Hosted (SDIO) → onboard ESP32-C6 → BLE → Fluval Plant 4.0
-```
-
-The onboard C6 runs **ESP-Hosted slave** firmware (same as Wi-Fi). NimBLE on the P4 host uses ESP-Hosted VHCI for BLE central role. UART to an external helper board is optional fallback only (`tools/fluval_ble_helper/`).
+Fluval shares `ble_central_manager` with Chihiros (one connection, heater priority). See **Architecture** above.
 
 ### Not yet supported
 
