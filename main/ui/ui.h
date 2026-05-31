@@ -3,24 +3,12 @@
 #include "lvgl.h"
 #include "co2/co2_schedule.h"
 #include "feeder/feeder_schedule.h"
+#include "screen_dashboard_cockpit.h"
 #include "storage/settings_nvs.h"
 
 typedef struct {
     lv_obj_t *root;
-    lv_obj_t *label_co2;
-    lv_obj_t *label_co2_detail;
-    lv_obj_t *label_feeder;
-    lv_obj_t *label_filter;
-    lv_obj_t *label_filter_energy;
-    lv_obj_t *label_filter_alarm;
-    lv_obj_t *label_fluval_title;
-    lv_obj_t *label_fluval_summary;
-    lv_obj_t *label_fluval_channels;
-    lv_obj_t *label_wifi;
-    lv_obj_t *label_heater;
-    lv_obj_t *label_maint;
-    lv_obj_t *label_water;
-    lv_obj_t *label_maint_tasks;
+    fishduino_cockpit_handles_t cockpit;
 } fishduino_ui_t;
 
 void fishduino_ui_init(fishduino_ui_t *ui);
