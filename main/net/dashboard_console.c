@@ -1,6 +1,7 @@
 #include "dashboard_console.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "dashboard_data.h"
 #include "esp_console.h"
@@ -25,8 +26,10 @@ static void print_snapshot(const dashboard_snapshot_t *s)
     printf("CO2: %s desired=%s relay=%s%s online=%s | block: %s\n", s->co2_state_text,
            s->co2_desired_on ? "on" : "off", s->co2_relay_known ? (s->co2_relay_on ? "on" : "off") : "unknown",
            s->co2_relay_known ? "" : "", s->co2_online ? "yes" : "no", s->co2_block_text);
-    printf("Feeder: cfg=%s sched=%s next=%s\n", s->feeder_configured ? "yes" : "no",
-           s->feeder_scheduled ? "yes" : "no", s->next_feed_text);
+    const char *feeder_sched =
+        !s->feeder_configured ? "n/a" : (s->feeder_scheduled ? "yes" : "no");
+    printf("Feeder: cfg=%s sched=%s next=%s\n", s->feeder_configured ? "yes" : "no", feeder_sched,
+           s->next_feed_text);
     printf("Water: %s %s\n", s->water_has_entry ? s->water_alert_text : "no test",
            s->water_updated_text);
     printf("Reminders: %zu due next=%s\n", s->reminders_due_count,
@@ -42,28 +45,40 @@ static void print_snapshot(const dashboard_snapshot_t *s)
            s->temp_trend_valid ? "yes" : "no");
 }
 
+typedef struct {
+    fishduino_co2_t co2;
+    fishduino_feeder_t feeder;
+    fishduino_settings_t settings;
+    dashboard_snapshot_t snap;
+    fishduino_shelly_state_t shelly;
+} dashboard_console_work_t;
+
 static int cmd_dashboard_status(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
 
-    fishduino_co2_t co2;
-    fishduino_feeder_t feeder;
-    fishduino_settings_t settings;
-    fishduino_app_dashboard_inputs(&co2, &feeder, &settings);
+    dashboard_console_work_t *work = calloc(1, sizeof(*work));
+    if (work == NULL) {
+        printf("dashboard_status: out of memory\n");
+        return 1;
+    }
 
-    dashboard_snapshot_t snap;
-    dashboard_data_refresh(&snap, &co2, &feeder, &settings);
-    print_snapshot(&snap);
+    fishduino_app_dashboard_inputs(&work->co2, &work->feeder, &work->settings);
 
-    fishduino_shelly_state_t ss;
-    if (fishduino_shelly_manager_get_state_snapshot(&ss)) {
+    dashboard_data_refresh(&work->snap, &work->co2, &work->feeder, &work->settings);
+    print_snapshot(&work->snap);
+
+    if (fishduino_shelly_manager_get_state_snapshot(&work->shelly)) {
         printf("Shelly mgr: co2_desired=%s heater_out=%s filter_alarm=%d\n",
-               ss.co2_desired_on ? "on" : "off", ss.heater_status.output ? "on" : "off",
-               (int)ss.filter_alarm);
+               work->shelly.co2_desired_on ? "on" : "off",
+               work->shelly.heater_status.output ? "on" : "off",
+               (int)work->shelly.filter_alarm);
     } else {
         printf("Shelly mgr: snapshot unavailable\n");
     }
+
+    free(work);
     return 0;
 }
 

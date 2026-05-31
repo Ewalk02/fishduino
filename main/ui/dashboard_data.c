@@ -301,8 +301,9 @@ static void fill_feeder(dashboard_snapshot_t *out, const fishduino_feeder_t *fee
                         const fishduino_time_snapshot_t *now)
 {
     out->feeder_configured = fishduino_feeder_actuator_is_configured();
-    out->feeder_scheduled =
+    bool slots_enabled =
         feeder->settings.feeder.feed_min_1 != 0xFFFF || feeder->settings.feeder.feed_min_2 != 0xFFFF;
+    out->feeder_scheduled = out->feeder_configured && slots_enabled;
     out->next_feed_valid = false;
     out->next_feed_text[0] = '\0';
 
