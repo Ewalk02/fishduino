@@ -50,8 +50,10 @@ static int cmd_safety_test(int argc, char **argv)
     printf("7) Fishduino never Switch.Set on filter plug\n");
     printf("   CO2 IP: %s (enabled=%s id=%d)\n", st.shelly_co2.ip, st.shelly_co2.enabled ? "yes" : "no",
            (int)st.shelly_co2.switch_id);
-    printf("   Filter IP: %s (enabled=%s id=%d) READ-ONLY\n\n", st.shelly_filter.ip,
+    printf("   Filter IP: %s (enabled=%s id=%d) READ-ONLY\n", st.shelly_filter.ip,
            st.shelly_filter.enabled ? "yes" : "no", (int)st.shelly_filter.switch_id);
+    printf("   Heater IP: %s (enabled=%s id=%d)\n\n", st.shelly_heater.ip,
+           st.shelly_heater.enabled ? "yes" : "no", (int)st.shelly_heater.switch_id);
 
     printf("Also: filter_calibrate (30s, filter lamp ON)\n");
     return 0;

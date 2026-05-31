@@ -40,7 +40,12 @@ typedef struct {
     bool heater_online;
     char heater_state_text[24];
     char heater_relay_text[32];
-    char heater_shelly_text[32];
+    char heater_shelly_text[48];
+    bool heater_shelly_enabled;
+    bool heater_shelly_online;
+    bool heater_shelly_relay_on;
+    bool heater_shelly_stale;
+    float heater_shelly_last_watts;
 
     bool filter_enabled;
     float filter_watts;
@@ -53,6 +58,8 @@ typedef struct {
     bool co2_enabled;
     bool co2_on;
     bool co2_desired_on;
+    bool co2_relay_on;
+    bool co2_relay_known;
     bool co2_online;
     bool co2_waiting_time;
     bool co2_manual;

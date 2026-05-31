@@ -7,6 +7,8 @@
 #include "esp_timer.h"
 #include "heater/chihiros_ble_client.h"
 #include "heater/heater_safety.h"
+#include "maintenance/maintenance_mode.h"
+#include "shelly/shelly_manager.h"
 #include "storage/settings_runtime.h"
 
 static const char *TAG = "heater_mgr";
@@ -147,7 +149,15 @@ void heater_manager_tick(void)
     refresh_status_from_ble();
 
     fishduino_settings_t st;
-    if (!fishduino_settings_get_snapshot(&st) || !st.heater.enabled) {
+    if (!fishduino_settings_get_snapshot(&st)) {
+        return;
+    }
+
+    bool want_shelly = st.shelly_heater.enabled && st.heater.enabled &&
+                       !fishduino_maintenance_mode_is_active();
+    fishduino_shelly_heater_apply_power(want_shelly);
+
+    if (!st.heater.enabled) {
         return;
     }
 

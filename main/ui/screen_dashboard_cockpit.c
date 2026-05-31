@@ -464,22 +464,28 @@ static void update_temp_chart(fishduino_cockpit_handles_t *h, const dashboard_sn
     lv_chart_refresh(h->chart_temp);
 }
 
+#define TEMP_GAUGE_MIN_F 70.0f
+#define TEMP_GAUGE_MAX_F 90.0f
+#define TEMP_GAUGE_FALLBACK_SETPOINT_F 78.0f
+
+static float gauge_display_setpoint_f(const dashboard_snapshot_t *s)
+{
+    if (!s->heater_enabled || s->setpoint_f < 50.0f || s->setpoint_f > 95.0f) {
+        return TEMP_GAUGE_FALLBACK_SETPOINT_F;
+    }
+    return s->setpoint_f;
+}
+
 static void update_temp_gauge(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)
 {
     char val[16];
     char sub[32];
     char st[24];
 
-    float min = s->setpoint_f - 5.0f;
-    float max = s->setpoint_f + 5.0f;
-    if (min < 65.0f) {
-        min = 65.0f;
-    }
-    if (max > 95.0f) {
-        max = 95.0f;
-    }
-    h->gauge_temp.min_val = min;
-    h->gauge_temp.max_val = max;
+    float setpt = gauge_display_setpoint_f(s);
+    h->gauge_temp.min_val = TEMP_GAUGE_MIN_F;
+    h->gauge_temp.max_val = TEMP_GAUGE_MAX_F;
+    cockpit_gauge_set_scale_ticks(&h->gauge_temp, "70", "90");
 
     if (s->temp_valid) {
         snprintf(val, sizeof(val), "%.1f", (double)s->temp_f);
@@ -490,27 +496,42 @@ static void update_temp_gauge(fishduino_cockpit_handles_t *h, const dashboard_sn
     snprintf(st, sizeof(st), "%s", s->heater_state_text);
     cockpit_gauge_set_labels(&h->gauge_temp, val, sub, st);
 
+    cockpit_gauge_set_zones_linear(&h->gauge_temp, setpt - 0.5f, setpt + 0.5f);
     if (s->heater_enabled && s->temp_valid) {
-        cockpit_gauge_set_zones_linear(&h->gauge_temp, s->setpoint_f - 0.5f, s->setpoint_f + 0.5f);
         cockpit_gauge_set_needle(&h->gauge_temp, s->temp_f, true);
     } else {
-        cockpit_gauge_set_zones_linear(&h->gauge_temp, s->setpoint_f - 0.5f, s->setpoint_f + 0.5f);
-        cockpit_gauge_set_needle(&h->gauge_temp, s->setpoint_f, false);
+        cockpit_gauge_set_needle(&h->gauge_temp, setpt, false);
     }
 
-    char setpt[24];
-    snprintf(setpt, sizeof(setpt), "SET %.1fF", (double)s->setpoint_f);
-    lv_label_set_text(h->lbl_temp_setpoint, setpt);
+    char setpt_lbl[24];
+    snprintf(setpt_lbl, sizeof(setpt_lbl), "SET %.1fF", (double)setpt);
+    lv_label_set_text(h->lbl_temp_setpoint, setpt_lbl);
 
-    lv_color_t relay_color = cockpit_color_amber();
-    if (s->heater_heating) {
-        relay_color = cockpit_color_red();
-    } else if (s->heater_online) {
-        relay_color = cockpit_color_green();
+    lv_color_t chihiros_color = cockpit_color_amber();
+    if (!s->heater_enabled) {
+        chihiros_color = cockpit_color_dim();
+    } else if (!s->heater_online || s->temp_stale) {
+        chihiros_color = cockpit_color_red();
+    } else if (s->heater_heating) {
+        chihiros_color = cockpit_color_red();
+    } else {
+        chihiros_color = cockpit_color_green();
     }
     lv_label_set_text(h->lbl_heater_relay, s->heater_relay_text);
-    lv_obj_set_style_text_color(h->lbl_heater_relay, relay_color, 0);
+    lv_obj_set_style_text_color(h->lbl_heater_relay, chihiros_color, 0);
+
+    lv_color_t shelly_color = cockpit_color_dim();
+    if (!s->heater_shelly_enabled) {
+        shelly_color = cockpit_color_dim();
+    } else if (!s->heater_shelly_online || s->heater_shelly_stale) {
+        shelly_color = cockpit_color_red();
+    } else if (s->heater_shelly_relay_on) {
+        shelly_color = cockpit_color_green();
+    } else {
+        shelly_color = cockpit_color_amber();
+    }
     lv_label_set_text(h->lbl_heater_shelly, s->heater_shelly_text);
+    lv_obj_set_style_text_color(h->lbl_heater_shelly, shelly_color, 0);
 }
 
 static void update_filter_gauge(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)
@@ -552,11 +573,19 @@ static void update_filter_gauge(fishduino_cockpit_handles_t *h, const dashboard_
 
 static void update_co2_gauge(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)
 {
-    cockpit_gauge_set_zones_on_off(&h->gauge_co2, s->co2_on);
-    cockpit_gauge_set_needle(&h->gauge_co2, s->co2_on ? 1.0f : 0.0f, true);
+    bool relay = s->co2_relay_known ? s->co2_relay_on : false;
+    cockpit_gauge_set_zones_on_off(&h->gauge_co2, relay);
+    cockpit_gauge_set_needle(&h->gauge_co2, relay ? 1.0f : 0.0f, true);
     cockpit_gauge_set_labels(&h->gauge_co2, s->co2_state_text, "INJECTION", s->co2_block_text);
 
-    lv_color_t c = s->co2_on ? cockpit_color_green() : cockpit_color_red();
+    lv_color_t c = cockpit_color_red();
+    if (!s->co2_online && s->co2_enabled) {
+        c = cockpit_color_red();
+    } else if (s->co2_relay_known && s->co2_desired_on == s->co2_relay_on) {
+        c = s->co2_relay_on ? cockpit_color_green() : cockpit_color_amber();
+    } else if (s->co2_desired_on) {
+        c = cockpit_color_amber();
+    }
     if (s->co2_block_reason != CO2_BLOCK_NONE) {
         c = cockpit_color_amber();
     }
@@ -566,13 +595,33 @@ static void update_co2_gauge(fishduino_cockpit_handles_t *h, const dashboard_sna
 
 static void update_feeder_gauge(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)
 {
-    const char *en = s->feeder_scheduled ? "ON" : "OFF";
-    const char *next = s->next_feed_valid ? s->next_feed_text : "--:--";
-    char sub[24];
-    snprintf(sub, sizeof(sub), "NEXT %s", next);
-    cockpit_gauge_set_zones_on_off(&h->gauge_feeder, s->feeder_scheduled);
-    cockpit_gauge_set_needle(&h->gauge_feeder, s->feeder_scheduled ? 1.0f : 0.0f, true);
-    cockpit_gauge_set_labels(&h->gauge_feeder, en, sub, s->feeder_configured ? "READY" : "NO GPIO");
+    const char *en = "OFF";
+    if (!s->feeder_configured) {
+        en = "NO GPIO";
+    } else if (s->feeder_scheduled) {
+        en = "ON";
+    } else {
+        en = "OFF";
+    }
+
+    char sub[28];
+    if (!s->feeder_configured || !s->feeder_scheduled) {
+        snprintf(sub, sizeof(sub), "%s", s->next_feed_text);
+    } else {
+        snprintf(sub, sizeof(sub), "NEXT %s", s->next_feed_text);
+    }
+
+    const char *status = "READY";
+    if (!s->feeder_configured) {
+        status = "NO GPIO";
+    } else if (!s->feeder_scheduled) {
+        status = "DISABLED";
+    }
+
+    cockpit_gauge_set_zones_on_off(&h->gauge_feeder, s->feeder_scheduled && s->feeder_configured);
+    cockpit_gauge_set_needle(&h->gauge_feeder,
+                             (s->feeder_scheduled && s->feeder_configured) ? 1.0f : 0.0f, true);
+    cockpit_gauge_set_labels(&h->gauge_feeder, en, sub, status);
 }
 
 static void update_water_panel(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)

@@ -31,3 +31,6 @@ bool fishduino_shelly_get_switch_status(const char *ip, int switch_id, fishduino
 
 /** Switch.Set — CO2 plug only; refuses filter IP. */
 bool fishduino_shelly_co2_set_output(const fishduino_settings_t *settings, bool on);
+
+/** Switch.Set — heater plug only; refuses filter IP. */
+bool fishduino_shelly_heater_set_output(const fishduino_settings_t *settings, bool on);
