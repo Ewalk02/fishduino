@@ -18,6 +18,12 @@ set(fishduino_srcs
   "net/heater_console.c"
   "net/maintenance_console.c"
   "net/ota_console.c"
+  "net/water_console.c"
+  "net/maint_tracker_console.c"
+  "water/water_storage.c"
+  "water/water_metrics.c"
+  "water/water_alerts.c"
+  "maint_tracker/maint_tracker.c"
   "shelly/shelly_manager.c"
   "safety/co2_safety.c"
   "maintenance/maintenance_mode.c"
@@ -43,6 +49,10 @@ set(fishduino_srcs
   "ui/screen_fluval_settings.c"
   "ui/screen_heater_settings.c"
   "ui/screen_maintenance.c"
+  "ui/screen_water_tests.c"
+  "ui/screen_water_entry.c"
+  "ui/screen_water_history.c"
+  "ui/screen_maint_tracker.c"
 )
 
 set(fishduino_requires
@@ -56,6 +66,7 @@ set(fishduino_requires
   json
   lwip
   nvs_flash
+  esp_partition
   console
   driver
   freertos

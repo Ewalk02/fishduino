@@ -15,6 +15,8 @@ typedef struct {
     lv_obj_t *label_wifi;
     lv_obj_t *label_maint;
     lv_obj_t *label_heater;
+    lv_obj_t *label_water;
+    lv_obj_t *label_maint_tasks;
     lv_obj_t *btn_fluval_auto;
     lv_obj_t *btn_fluval_manual;
     lv_obj_t *btn_fluval_setall;

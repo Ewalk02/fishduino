@@ -64,6 +64,31 @@ idf.py set-target esp32p4
 idf.py build
 ```
 
+## Headless mode (no DSI panel)
+
+Use when the MIPI DSI display is **not connected** and you want to test serial console / backend features (`water_add`, `maint_list`, Shelly, etc.) without the display init hang.
+
+**Enable** (either method):
+
+1. `idf.py menuconfig` → **Fishduino Configuration** → **Headless mode (skip display/touch/LVGL)** → enable
+2. Uncomment in `sdkconfig.defaults`:
+   ```text
+   CONFIG_FISHDUINO_HEADLESS=y
+   ```
+
+Then regenerate config and build:
+
+```bash
+rm -f sdkconfig
+idf.py set-target esp32p4
+idf.py build
+idf.py -p /dev/ttyACM0 flash monitor
+```
+
+On boot you should see: `Headless mode enabled: skipping display/touch/LVGL init` and the `fishduino>` prompt.
+
+**Disable:** turn off in menuconfig or re-comment the line in `sdkconfig.defaults`, then `rm -f sdkconfig`, `idf.py set-target esp32p4`, and rebuild. Normal builds initialize the touchscreen UI when headless is off (default).
+
 ## Flash and monitor
 
 ```bash
@@ -141,6 +166,8 @@ Read-only: Fishduino never sends `Switch.Set` to the filter plug. Low-power alar
 | `maintenance_start` / `maintenance_end` / `maintenance_status` | Maintenance Mode |
 | `ota_status` / `ota_update` / `ota_confirm_good` | OTA |
 | `co2_override_on` | Dangerous CO2 override (expires) |
+| `water_add` / `water_latest` / `water_list` / `water_clear_confirm` | Water test log |
+| `maint_list` / `maint_due` / `maint_done` / `maint_snooze` | Maintenance reminders |
 
 Touch **CO2 ON / OFF / AUTO** on the dashboard for manual override. If CO2 is blocked by the interlock, the dashboard shows the reason.
 
@@ -202,6 +229,19 @@ Dangerous override (auto-expires): serial `co2_override_on <minutes>`.
 - Persists end time in NVS; turns CO2 off on start
 - Suppresses non-critical filter OFF / LOW_POWER alarms
 - **Does not** suppress heater over-temp
+
+## Water test logging and reminders
+
+Manual entry of pH, ammonia, nitrite, nitrate (and optional notes). **Not** auto-sensed.
+
+- **OPTIONS → Water Tests** — add entry, view history/chart, latest on dashboard
+- **OPTIONS → Reminders** — recurring tasks (filter rinse, water tests, etc.)
+- Storage: flash ring buffer (`waterlog` partition), 200 entries, oldest dropped when full
+- Saving a water test marks **Check water parameters** done (+14 days)
+
+Distinct from **Maintenance Mode** above (temporary CO2-off).
+
+Details: [`docs/water_logging.md`](docs/water_logging.md)
 
 ## OTA with rollback
 
