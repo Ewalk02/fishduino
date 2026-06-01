@@ -62,7 +62,10 @@ CONFIG_ESP32P4_REV_MAX_FULL=199
 CONFIG_ESP_REV_MAX_FULL=199
 
 # Headless (no DSI panel): uncomment for console-only testing, then rm -f sdkconfig && idf.py set-target esp32p4
-# CONFIG_FISHDUINO_HEADLESS=y
+CONFIG_FISHDUINO_HEADLESS=y
+
+# app_main runs BSP display start + full LVGL UI tree build synchronously
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 
 # Cockpit dashboard typography
 CONFIG_LV_FONT_MONTSERRAT_16=y
