@@ -71,6 +71,7 @@ typedef struct {
 } fishduino_cockpit_handles_t;
 
 void fishduino_cockpit_dashboard_build(lv_obj_t *parent, fishduino_cockpit_handles_t *out);
+void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_handles_t *out);
 void fishduino_cockpit_dashboard_update(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *snap);
 
 #ifdef __cplusplus

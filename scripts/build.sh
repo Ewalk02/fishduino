@@ -8,7 +8,6 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/fishduino-env.sh"
 
 cd "${PROJECT_DIR}"
-idf.py set-target esp32p4
-idf.py build
+exec "${SCRIPT_DIR}/build-target.sh" 4in
 
 echo "Build OK: ${PROJECT_DIR}/build/fishduino.bin"

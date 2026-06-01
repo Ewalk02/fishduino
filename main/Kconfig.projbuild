@@ -1,5 +1,19 @@
 menu "Fishduino Configuration"
 
+    choice FISHDUINO_BOARD_TARGET
+        prompt "Fishduino board/display target"
+        default FISHDUINO_BOARD_4IN
+        help
+            Select the Waveshare board + panel at build time.
+            The firmware does not auto-detect the panel before display init.
+
+        config FISHDUINO_BOARD_4IN
+            bool "ESP32-P4-WIFI6 + 4 inch DSI Touch (480x800 portrait)"
+
+        config FISHDUINO_BOARD_7B
+            bool "ESP32-P4-WIFI6-7inch-Touch-LCD (B) (1024x600 landscape)"
+    endchoice
+
     config ESP_WIFI_SSID
         string "WiFi SSID"
         default ""

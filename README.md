@@ -1,6 +1,38 @@
-# Fishduino (ESP32-P4-WIFI6 + 4-DSI-TOUCH-A)
+# Fishduino (ESP32-P4)
 
-This project targets the Waveshare **ESP32-P4-WIFI6** development board with a Waveshare **4-DSI-TOUCH-A** (480×800, MIPI-DSI 2-lane, GT911 touch).
+Fishduino is a single codebase for Waveshare **ESP32-P4** aquarium controllers. Pick a **hardware target** at build time (the firmware does **not** auto-detect the panel before display init).
+
+## Supported hardware targets
+
+| Target | Board / panel | Resolution | Build |
+|--------|----------------|------------|--------|
+| **4in** (default) | [ESP32-P4-WIFI6](https://www.waveshare.com/esp32-p4-wifi6.htm) + [4-DSI-TOUCH-A](https://www.waveshare.com/wiki/4-DSI-TOUCH-A) | 480×800 portrait | `./scripts/build-target.sh 4in` |
+| **7b** | [ESP32-P4-WIFI6-7inch-Touch-LCD (B)](https://www.waveshare.com/esp32-p4-wifi6-7inch-touch-lcd-b.htm) | 1024×600 landscape | `./scripts/build-target.sh 7b` |
+
+Both use **RGB565**, **ESP-IDF 5.5.x**, **LVGL**, and an onboard **ESP32-C6** for Wi-Fi 6 / BLE via **ESP-Hosted** (SDIO). The UI picks **compact** (portrait) or **wide** (landscape) layout from the LVGL display resolution after init.
+
+**Warning:** Selecting the wrong target (e.g. 4in firmware on the 7B panel) can hang or blank the display during BSP init. Always run `build-target.sh` for the board you are flashing.
+
+### Build and flash (recommended)
+
+```bash
+cd ~/fishduino
+source scripts/fishduino-env.sh
+
+# 4" DSI dev board (or headless on that board — see sdkconfig.defaults.4in)
+./scripts/build-target.sh 4in
+idf.py -p /dev/ttyACM0 flash monitor
+
+# 7" integrated Touch LCD (B)
+./scripts/build-target.sh 7b
+idf.py -p /dev/ttyACM0 flash monitor
+```
+
+`build-target.sh` merges `sdkconfig.defaults.common` + target-specific defaults, installs the correct Waveshare BSP via `main/idf_component.yml`, backs up any existing `sdkconfig`, and runs `idf.py set-target` + `idf.py build`.
+
+**menuconfig:** **Fishduino Configuration → Fishduino board/display target** (must match `build-target.sh`).
+
+Peripheral GPIO (CO2 relay, feeder, etc.) is defined in `main/board/board_4in_pins.h` and `main/board/board_7b_pins.h` (7B assignments are TODO until wired).
 
 ## Prerequisites (Ubuntu)
 
@@ -41,7 +73,8 @@ idf.py menuconfig
 
 Set:
 
-- `Component config → Board Support Package(ESP32-P4) → Display → Select LCD type → Waveshare 4-DSI-TOUCH-A Display`
+- **Fishduino Configuration** → **Fishduino board/display target** (4in or 7B)
+- For **4in** only: BSP → **Waveshare 4-DSI-TOUCH-A Display**
 - **Fishduino Configuration** → **WiFi SSID** and **WiFi Password** (first-time / fallback before on-screen save)
 - `Component config → Wi-Fi Remote` → slave target **esp32c6**
 
@@ -53,15 +86,13 @@ Or press `/` in menuconfig and search for `WiFi SSID`.
 
 ```bash
 source scripts/fishduino-env.sh
-./scripts/build.sh
+./scripts/build-target.sh 4in    # or: 7b
 ```
 
-Or manually:
+Legacy wrapper (same as `build-target.sh 4in` if defaults are already 4in):
 
 ```bash
-source scripts/fishduino-env.sh
-idf.py set-target esp32p4
-idf.py build
+./scripts/build.sh
 ```
 
 ## Headless mode (no DSI panel)

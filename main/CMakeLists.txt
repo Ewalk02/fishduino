@@ -56,7 +56,16 @@ set(fishduino_srcs
   "ui/screen_water_entry.c"
   "ui/screen_water_history.c"
   "ui/screen_maint_tracker.c"
+  "board/fishduino_board.c"
+  "ui/fishduino_ui_layout.c"
+  "ui/screen_dashboard_cockpit_wide.c"
 )
+
+if(CONFIG_FISHDUINO_BOARD_7B)
+  list(APPEND fishduino_srcs "board/board_7b.c")
+else()
+  list(APPEND fishduino_srcs "board/board_4in.c")
+endif()
 
 set(fishduino_requires
   esp_wifi
@@ -86,6 +95,7 @@ if(CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE)
 endif()
 
 idf_component_register(SRCS ${fishduino_srcs}
-  INCLUDE_DIRS "." "ui"
+  INCLUDE_DIRS "." "ui" "board"
   REQUIRES ${fishduino_requires} bt
+  PRIV_REQUIRES ${fishduino_priv_requires}
 )
