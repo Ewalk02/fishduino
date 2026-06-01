@@ -17,7 +17,7 @@ void fishduino_ui_init(fishduino_ui_t *ui)
     lv_obj_remove_style_all(ui->root);
     lv_obj_set_size(ui->root, LV_PCT(100), LV_PCT(100));
 
-    ui->cockpit = fishduino_cockpit_dashboard_build(ui->root);
+    fishduino_cockpit_dashboard_build(ui->root, &ui->cockpit);
 
     fishduino_screen_options_build(ui->root);
     fishduino_screen_heater_build(ui->root);

@@ -198,9 +198,10 @@ void app_main(void)
 
     bsp_display_backlight_on();
 
-    fishduino_ui_t ui = {0};
-    fishduino_ui_init(&ui);
-    s_app.ui = &ui;
+    static fishduino_ui_t s_ui;
+    memset(&s_ui, 0, sizeof(s_ui));
+    fishduino_ui_init(&s_ui);
+    s_app.ui = &s_ui;
 #endif
 
     fishduino_scheduler_start(scheduler_tick, &s_app);
