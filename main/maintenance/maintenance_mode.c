@@ -119,6 +119,7 @@ esp_err_t fishduino_maintenance_mode_start(uint32_t duration_minutes)
     }
 
     fishduino_shelly_co2_command_now(false);
+    fishduino_shelly_heater_command_now(false);
     ESP_LOGI(TAG, "Maintenance mode started (%u min)", (unsigned)duration_minutes);
     return ESP_OK;
 }

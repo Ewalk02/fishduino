@@ -19,6 +19,7 @@ typedef enum {
 typedef struct {
     fishduino_shelly_switch_status_t co2_status;
     fishduino_shelly_switch_status_t filter_status;
+    fishduino_shelly_switch_status_t heater_status;
     fishduino_shelly_switch_status_t filter_last_known;
     uint32_t filter_last_known_age_ms;
     bool co2_desired_on;
@@ -29,6 +30,8 @@ typedef struct {
     bool filter_output_off_alert;
     uint32_t last_poll_ms;
     uint32_t last_co2_command_ms;
+    /** Last heater Switch.Set queue/attempt (success or failure). */
+    uint32_t last_heater_command_ms;
     uint32_t last_filter_good_power_ms;
     uint32_t last_filter_output_on_ms;
     bool alert_blink_on;
@@ -49,6 +52,12 @@ void fishduino_shelly_filter_alarm_tick(void);
 void fishduino_shelly_co2_manual(bool on);
 void fishduino_shelly_co2_auto(void);
 void fishduino_shelly_co2_command_now(bool on);
+
+/** Queue Switch.Set on heater plug (never sent to filter plug). */
+void fishduino_shelly_heater_command_now(bool on);
+
+/** Sync heater plug power: queues set when relay should match want_on. */
+void fishduino_shelly_heater_apply_power(bool want_on);
 
 void fishduino_shelly_set_co2_schedule_enabled(bool enabled);
 void fishduino_shelly_set_timezone(fishduino_timezone_t tz);

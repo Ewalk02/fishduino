@@ -22,6 +22,7 @@ static const char *TAG = "shelly_mgr";
 typedef enum {
     SHELLY_CMD_CO2_SET = 1,
     SHELLY_CMD_FILTER_CALIBRATE,
+    SHELLY_CMD_HEATER_SET,
 } shelly_cmd_type_t;
 
 typedef struct {
@@ -238,6 +239,31 @@ static bool execute_co2_set(const fishduino_settings_t *settings, bool on)
     return true;
 }
 
+static void record_heater_command_attempt(void)
+{
+    state_lock();
+    s_state.last_heater_command_ms = now_ms();
+    state_unlock();
+}
+
+static bool execute_heater_set(const fishduino_settings_t *settings, bool on)
+{
+    if (!settings->shelly_heater.enabled) {
+        return false;
+    }
+
+    record_heater_command_attempt();
+
+    if (!fishduino_shelly_heater_set_output(settings, on)) {
+        return false;
+    }
+
+    state_lock();
+    s_state.heater_status.output = on;
+    state_unlock();
+    return true;
+}
+
 typedef struct {
     float sum_watts;
     unsigned sample_count;
@@ -360,6 +386,11 @@ static void shelly_task(void *arg)
                 }
             } else if (cmd.type == SHELLY_CMD_FILTER_CALIBRATE) {
                 filter_calibrate_start(&settings);
+            } else if (cmd.type == SHELLY_CMD_HEATER_SET) {
+                fishduino_settings_t heater_settings;
+                if (fishduino_settings_get_snapshot(&heater_settings)) {
+                    execute_heater_set(&heater_settings, cmd.on);
+                }
             }
         }
 
@@ -373,11 +404,13 @@ static void shelly_task(void *arg)
 
             fishduino_shelly_switch_status_t co2_tmp;
             fishduino_shelly_switch_status_t filter_tmp;
+            fishduino_shelly_switch_status_t heater_tmp;
             bool filter_ok = false;
 
             state_lock();
             co2_tmp = s_state.co2_status;
             filter_tmp = s_state.filter_status;
+            heater_tmp = s_state.heater_status;
             state_unlock();
 
             if (settings.shelly_co2.enabled) {
@@ -386,12 +419,18 @@ static void shelly_task(void *arg)
             if (settings.shelly_filter.enabled && !s_cal_active) {
                 filter_ok = poll_plug_http(&settings.shelly_filter, &filter_tmp);
             }
+            if (settings.shelly_heater.enabled) {
+                poll_plug_http(&settings.shelly_heater, &heater_tmp);
+            }
 
             state_lock();
             s_state.last_poll_ms = t;
 
             if (settings.shelly_co2.enabled) {
                 s_state.co2_status = co2_tmp;
+            }
+            if (settings.shelly_heater.enabled) {
+                s_state.heater_status = heater_tmp;
             }
             if (settings.shelly_filter.enabled && !s_cal_active) {
                 bool was_off = !s_state.filter_status.output;
@@ -613,6 +652,57 @@ void fishduino_shelly_co2_auto(void)
 void fishduino_shelly_co2_command_now(bool on)
 {
     queue_co2_set(on);
+}
+
+static void queue_heater_set(bool on)
+{
+    if (s_cmd_queue == NULL) {
+        return;
+    }
+    shelly_cmd_t cmd = {.type = SHELLY_CMD_HEATER_SET, .on = on};
+    xQueueSend(s_cmd_queue, &cmd, 0);
+}
+
+void fishduino_shelly_heater_command_now(bool on)
+{
+    queue_heater_set(on);
+}
+
+static bool heater_cmd_interval_elapsed(uint32_t last_cmd_ms)
+{
+    uint32_t t = now_ms();
+    if (last_cmd_ms == 0) {
+        return true;
+    }
+    return (t - last_cmd_ms) >= FISHDUINO_SHELLY_HEATER_CMD_MIN_MS;
+}
+
+void fishduino_shelly_heater_apply_power(bool want_on)
+{
+    fishduino_settings_t settings;
+    if (!fishduino_settings_get_snapshot(&settings) || !settings.shelly_heater.enabled) {
+        return;
+    }
+
+    bool relay_on = false;
+    bool online = false;
+    uint32_t last_cmd_ms = 0;
+    state_lock();
+    relay_on = s_state.heater_status.output;
+    online = s_state.heater_status.online;
+    last_cmd_ms = s_state.last_heater_command_ms;
+    state_unlock();
+
+    if (online && relay_on == want_on) {
+        return;
+    }
+
+    if (!heater_cmd_interval_elapsed(last_cmd_ms)) {
+        return;
+    }
+
+    record_heater_command_attempt();
+    queue_heater_set(want_on);
 }
 
 void fishduino_shelly_set_co2_schedule_enabled(bool enabled)

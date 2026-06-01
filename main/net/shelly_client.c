@@ -280,6 +280,46 @@ static bool shelly_set_switch_output(const char *ip, int switch_id, bool on)
     return true;
 }
 
+static bool shelly_set_output_reject_filter(const fishduino_settings_t *settings, const char *ip,
+                                            const char *role)
+{
+    if (settings == NULL || ip == NULL || ip[0] == '\0') {
+        return false;
+    }
+    if (settings->shelly_filter.enabled &&
+        strncmp(ip, settings->shelly_filter.ip, FISHDUINO_IP_LEN) == 0) {
+        ESP_LOGE(TAG, "Refusing Switch.Set: %s IP matches filter plug", role);
+        return false;
+    }
+    return true;
+}
+
+static bool shelly_set_output_reject_co2_heater_collision(const fishduino_settings_t *settings,
+                                                          const char *ip, int switch_id,
+                                                          const char *role)
+{
+    if (settings == NULL || ip == NULL || ip[0] == '\0') {
+        return false;
+    }
+
+    if (strncmp(role, "CO2", 4) == 0) {
+        if (settings->shelly_heater.enabled &&
+            strncmp(ip, settings->shelly_heater.ip, FISHDUINO_IP_LEN) == 0 &&
+            switch_id == settings->shelly_heater.switch_id) {
+            ESP_LOGE(TAG, "Refusing Switch.Set: CO2 matches heater plug endpoint");
+            return false;
+        }
+    } else if (strncmp(role, "heater", 7) == 0) {
+        if (settings->shelly_co2.enabled &&
+            strncmp(ip, settings->shelly_co2.ip, FISHDUINO_IP_LEN) == 0 &&
+            switch_id == settings->shelly_co2.switch_id) {
+            ESP_LOGE(TAG, "Refusing Switch.Set: heater matches CO2 plug endpoint");
+            return false;
+        }
+    }
+    return true;
+}
+
 bool fishduino_shelly_co2_set_output(const fishduino_settings_t *settings, bool on)
 {
     if (settings == NULL || !settings->shelly_co2.enabled) {
@@ -287,14 +327,30 @@ bool fishduino_shelly_co2_set_output(const fishduino_settings_t *settings, bool 
     }
 
     const char *ip = settings->shelly_co2.ip;
-    if (ip[0] == '\0') {
+    if (!shelly_set_output_reject_filter(settings, ip, "CO2")) {
         return false;
     }
-
-    if (strncmp(ip, settings->shelly_filter.ip, FISHDUINO_IP_LEN) == 0) {
-        ESP_LOGE(TAG, "Refusing Switch.Set: CO2 IP matches filter plug");
+    if (!shelly_set_output_reject_co2_heater_collision(settings, ip, settings->shelly_co2.switch_id, "CO2")) {
         return false;
     }
 
     return shelly_set_switch_output(ip, settings->shelly_co2.switch_id, on);
+}
+
+bool fishduino_shelly_heater_set_output(const fishduino_settings_t *settings, bool on)
+{
+    if (settings == NULL || !settings->shelly_heater.enabled) {
+        return false;
+    }
+
+    const char *ip = settings->shelly_heater.ip;
+    if (!shelly_set_output_reject_filter(settings, ip, "heater")) {
+        return false;
+    }
+    if (!shelly_set_output_reject_co2_heater_collision(settings, ip, settings->shelly_heater.switch_id,
+                                                       "heater")) {
+        return false;
+    }
+
+    return shelly_set_switch_output(ip, settings->shelly_heater.switch_id, on);
 }

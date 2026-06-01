@@ -77,3 +77,53 @@ bool fishduino_shelly_address_error(const char *addr, bool allow_empty, char *bu
     snprintf(buf, len, "Invalid IPv4 or hostname");
     return true;
 }
+
+static bool plug_ip_same(const fishduino_shelly_plug_settings_t *a, const fishduino_shelly_plug_settings_t *b)
+{
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+    if (a->ip[0] == '\0' || b->ip[0] == '\0') {
+        return false;
+    }
+    return strncmp(a->ip, b->ip, FISHDUINO_IP_LEN) == 0;
+}
+
+static bool controllable_same_endpoint(const fishduino_shelly_plug_settings_t *a,
+                                       const fishduino_shelly_plug_settings_t *b)
+{
+    return a->enabled && b->enabled && plug_ip_same(a, b) && a->switch_id == b->switch_id;
+}
+
+bool fishduino_shelly_plugs_config_error(const fishduino_settings_t *settings, char *buf, size_t len)
+{
+    if (settings == NULL) {
+        return false;
+    }
+
+    const fishduino_shelly_plug_settings_t *co2 = &settings->shelly_co2;
+    const fishduino_shelly_plug_settings_t *filter = &settings->shelly_filter;
+    const fishduino_shelly_plug_settings_t *heater = &settings->shelly_heater;
+
+    if (controllable_same_endpoint(co2, heater)) {
+        snprintf(buf, len, "CO2 and heater share IP and switch id");
+        return true;
+    }
+    if (co2->enabled && heater->enabled && plug_ip_same(co2, heater)) {
+        snprintf(buf, len, "CO2 and heater share the same IP");
+        return true;
+    }
+    if (co2->enabled && filter->enabled && plug_ip_same(co2, filter)) {
+        snprintf(buf, len, "CO2 and filter share the same IP");
+        return true;
+    }
+    if (heater->enabled && filter->enabled && plug_ip_same(heater, filter)) {
+        snprintf(buf, len, "Heater and filter share the same IP");
+        return true;
+    }
+
+    if (buf != NULL && len > 0) {
+        buf[0] = '\0';
+    }
+    return false;
+}

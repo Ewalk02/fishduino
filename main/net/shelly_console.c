@@ -41,6 +41,10 @@ static int cmd_shelly_status(int argc, char **argv)
            cfg.shelly_filter.enabled ? "yes" : "no", (int)cfg.shelly_filter.switch_id);
     print_status(&st.filter_status, "Filter");
 
+    printf("Heater plug: %s enabled=%s switch_id=%d\n", cfg.shelly_heater.ip,
+           cfg.shelly_heater.enabled ? "yes" : "no", (int)cfg.shelly_heater.switch_id);
+    print_status(&st.heater_status, "Heater");
+
     printf("Filter last-known: output=%s %.1fW age=%lums\n",
            st.filter_last_known.output ? "on" : "off", (double)st.filter_last_known.watts,
            (unsigned long)st.filter_last_known_age_ms);
@@ -81,6 +85,24 @@ static int cmd_shelly_filter(int argc, char **argv)
     fishduino_shelly_manager_get_state_snapshot(&st);
     print_status(&st.filter_status, "Filter");
     printf("read-only: Fishduino never sends Switch.Set to the filter plug\n");
+    return 0;
+}
+
+static int cmd_shelly_heater_on(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    fishduino_shelly_heater_command_now(true);
+    printf("Heater plug ON queued (Switch.Set)\n");
+    return 0;
+}
+
+static int cmd_shelly_heater_off(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    fishduino_shelly_heater_command_now(false);
+    printf("Heater plug OFF queued\n");
     return 0;
 }
 
@@ -204,6 +226,20 @@ void fishduino_shelly_console_register(void)
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&filter_cmd));
 
+    const esp_console_cmd_t heater_on = {
+        .command = "shelly_heater_on",
+        .help = "Heater plug ON (Switch.Set)",
+        .func = &cmd_shelly_heater_on,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&heater_on));
+
+    const esp_console_cmd_t heater_off = {
+        .command = "shelly_heater_off",
+        .help = "Heater plug OFF",
+        .func = &cmd_shelly_heater_off,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&heater_off));
+
     const esp_console_cmd_t alarm_cmd = {
         .command = "shelly_alarm",
         .help = "Show filter alert state",
@@ -219,5 +255,5 @@ void fishduino_shelly_console_register(void)
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&co2_sched));
 
-    ESP_LOGI(TAG, "Console: shelly, shelly_co2_*, shelly_filter, shelly_alarm, co2_schedule");
+    ESP_LOGI(TAG, "Console: shelly, shelly_co2_*, shelly_filter, shelly_heater_*, shelly_alarm, co2_schedule");
 }

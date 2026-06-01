@@ -74,6 +74,7 @@ typedef struct {
     fishduino_feeder_settings_t feeder;
     fishduino_shelly_plug_settings_t shelly_co2;
     fishduino_shelly_plug_settings_t shelly_filter;
+    fishduino_shelly_plug_settings_t shelly_heater;
     float filter_running_watts_threshold;
     uint16_t filter_low_power_alarm_delay_s;
     uint16_t co2_command_min_interval_s;

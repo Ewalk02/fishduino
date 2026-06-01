@@ -15,6 +15,7 @@ set(fishduino_srcs
   "net/shelly_console.c"
   "net/safety_console.c"
   "net/status_console.c"
+  "net/dashboard_console.c"
   "net/heater_console.c"
   "net/maintenance_console.c"
   "net/ota_console.c"
@@ -39,7 +40,9 @@ set(fishduino_srcs
   "fluval/fluval_light.c"
   "net/fluval_console.c"
   "ui/ui.c"
-  "ui/screen_dashboard.c"
+  "ui/dashboard_data.c"
+  "ui/cockpit_gauge.c"
+  "ui/screen_dashboard_cockpit.c"
   "ui/screen_options.c"
   "ui/screen_wifi_settings.c"
   "ui/screen_shelly_settings.c"
@@ -83,6 +86,6 @@ if(CONFIG_FISHDUINO_FLUVAL_HOSTED_BLE)
 endif()
 
 idf_component_register(SRCS ${fishduino_srcs}
-  INCLUDE_DIRS "."
+  INCLUDE_DIRS "." "ui"
   REQUIRES ${fishduino_requires} bt
 )
