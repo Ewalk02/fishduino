@@ -43,7 +43,6 @@ set(fishduino_srcs
   "ui/dashboard_data.c"
   "ui/cockpit_gauge.c"
   "ui/screen_dashboard_cockpit.c"
-  "ui/screen_dashboard.c"
   "ui/screen_options.c"
   "ui/screen_wifi_settings.c"
   "ui/screen_shelly_settings.c"
