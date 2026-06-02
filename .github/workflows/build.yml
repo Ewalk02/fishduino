@@ -27,7 +27,9 @@ jobs:
           if [[ "${{ matrix.fishduino_target }}" == "4in" ]]; then
             grep -q 'CONFIG_FISHDUINO_BOARD_4IN=y' sdkconfig
             grep -q 'CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y' sdkconfig
+            grep -q '# CONFIG_FISHDUINO_HEADLESS is not set' sdkconfig
           else
             grep -q 'CONFIG_FISHDUINO_BOARD_7B=y' sdkconfig
             grep -q 'CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y' sdkconfig
+            grep -q '# CONFIG_FISHDUINO_HEADLESS is not set' sdkconfig
           fi

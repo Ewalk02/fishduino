@@ -19,16 +19,18 @@ Both use **RGB565**, **ESP-IDF 5.5.x**, **LVGL**, and an onboard **ESP32-C6** fo
 cd ~/fishduino
 source scripts/fishduino-env.sh
 
-# 4" DSI dev board (or headless on that board — see sdkconfig.defaults.4in)
+# 4" DSI dev board (480×800 portrait, display enabled)
 ./scripts/build-target.sh 4in
 idf.py -p /dev/ttyACM0 flash monitor
 
-# 7" integrated Touch LCD (B)
+# 7" integrated Touch LCD (B) (1024×600 landscape, display enabled)
 ./scripts/build-target.sh 7b
 idf.py -p /dev/ttyACM0 flash monitor
 ```
 
-`build-target.sh` merges `sdkconfig.defaults.common` + target-specific defaults, installs the correct Waveshare BSP via `main/idf_component.yml`, backs up any existing `sdkconfig`, and runs `idf.py set-target` + `idf.py build`.
+`build-target.sh` merges `sdkconfig.defaults.common` + target-specific defaults, copies the selected Waveshare BSP manifest into **`main/idf_component.yml` and `idf_component.yml`** (project root and main component must match — only one BSP is active per build), backs up any existing `sdkconfig`, and runs `idf.py set-target` + `idf.py build`.
+
+**Headless mode** (skip display/touch/LVGL) is optional for either target — enable in menuconfig or add `CONFIG_FISHDUINO_HEADLESS=y` to the target defaults. It is **off by default** for both `4in` and `7b`.
 
 **menuconfig:** **Fishduino Configuration → Fishduino board/display target** (must match `build-target.sh`).
 

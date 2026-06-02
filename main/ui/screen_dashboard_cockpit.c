@@ -424,13 +424,17 @@ static void fishduino_cockpit_dashboard_build_compact(lv_obj_t *parent, fishduin
 
 }
 
-void fishduino_cockpit_dashboard_build(lv_obj_t *parent, fishduino_cockpit_handles_t *out)
+fishduino_cockpit_handles_t fishduino_cockpit_dashboard_build(lv_obj_t *parent)
 {
+    fishduino_cockpit_handles_t out = {0};
+
     if (fishduino_ui_get_layout() == FISHDUINO_UI_LAYOUT_WIDE) {
-        fishduino_cockpit_dashboard_build_wide(parent, out);
+        fishduino_cockpit_dashboard_build_wide(parent, &out);
     } else {
-        fishduino_cockpit_dashboard_build_compact(parent, out);
+        fishduino_cockpit_dashboard_build_compact(parent, &out);
     }
+
+    return out;
 }
 
 static void update_temp_chart(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)

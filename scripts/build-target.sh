@@ -42,8 +42,9 @@ echo "==> Writing sdkconfig.defaults (common + ${TARGET})"
 cat "${PROJECT_DIR}/sdkconfig.defaults.common" \
     "${PROJECT_DIR}/sdkconfig.defaults.${TARGET}" > "${PROJECT_DIR}/sdkconfig.defaults"
 
-echo "==> Installing main/idf_component.yml for ${TARGET}"
+echo "==> Installing idf_component.yml for ${TARGET} (main/ and project root)"
 cp "${DEPS_DIR}/idf_component.full.${TARGET}.yml" "${PROJECT_DIR}/main/idf_component.yml"
+cp "${DEPS_DIR}/idf_component.full.${TARGET}.yml" "${PROJECT_DIR}/idf_component.yml"
 
 if [[ -d managed_components ]]; then
     echo "==> Note: removing managed_components/ so the Component Manager fetches the correct BSP"
