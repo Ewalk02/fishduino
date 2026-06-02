@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 # Source ESP-IDF 5.5.4 and verify idf.py is available.
+# Works locally (~/.espressif) and in GitHub Actions (IDF_PATH from install-esp-idf-action).
 set -euo pipefail
 
-IDF_EXPORT="${HOME}/.espressif/v5.5.4/esp-idf/export.sh"
+if command -v idf.py >/dev/null 2>&1; then
+    idf.py --version
+    exit 0
+fi
 
-if [[ ! -f "${IDF_EXPORT}" ]]; then
-    echo "error: ESP-IDF export script not found at:" >&2
-    echo "  ${IDF_EXPORT}" >&2
-    echo "Install ESP-IDF v5.5.4 or adjust IDF_EXPORT in this script." >&2
+IDF_EXPORT=""
+
+if [[ -n "${IDF_PATH:-}" && -f "${IDF_PATH}/export.sh" ]]; then
+    IDF_EXPORT="${IDF_PATH}/export.sh"
+elif [[ -f "${HOME}/.espressif/v5.5.4/esp-idf/export.sh" ]]; then
+    IDF_EXPORT="${HOME}/.espressif/v5.5.4/esp-idf/export.sh"
+fi
+
+if [[ -z "${IDF_EXPORT}" ]]; then
+    echo "error: ESP-IDF export script not found." >&2
+    echo "  Set IDF_PATH to your ESP-IDF tree, or install v5.5.4 under:" >&2
+    echo "  ${HOME}/.espressif/v5.5.4/esp-idf/export.sh" >&2
     exit 1
 fi
 

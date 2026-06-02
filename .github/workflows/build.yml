@@ -21,6 +21,7 @@ jobs:
 
       - name: Build firmware (${{ matrix.fishduino_target }})
         run: |
+          chmod +x scripts/build-target.sh scripts/fishduino-env.sh
           ./scripts/build-target.sh "${{ matrix.fishduino_target }}"
           grep -q 'CONFIG_PARTITION_TABLE_CUSTOM=y' sdkconfig
           grep -q 'CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y' sdkconfig
