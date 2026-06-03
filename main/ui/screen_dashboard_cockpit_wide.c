@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "esp_log.h"
+
 #include "screen_co2_schedule.h"
 #include "screen_fluval_settings.h"
 #include "screen_heater_settings.h"
@@ -13,6 +15,68 @@
 #define GAUGE_START 135
 #define GAUGE_END   405
 #define NAV_COUNT   6
+
+/* Set to 1 to log LVGL geometry warnings after building the wide dashboard. */
+#ifndef FISHDUINO_COCKPIT_WIDE_LAYOUT_DEBUG
+#define FISHDUINO_COCKPIT_WIDE_LAYOUT_DEBUG 1
+#endif
+
+/* 7B landscape canvas (1024×600). */
+#define W7_SCREEN_W        1024
+#define W7_SCREEN_H        600
+#define W7_MARGIN          8
+#define W7_INNER_W         (W7_SCREEN_W - (W7_MARGIN * 2))
+
+#define W7_BANNER_Y        4
+#define W7_BANNER_H        28
+#define W7_BRAND_Y         30
+
+#define W7_GAUGE_ROW_Y     44
+#define W7_GAUGE_GAP       8
+#define W7_GAUGE_FILTER_SZ 140
+#define W7_GAUGE_TEMP_SZ   168
+#define W7_GAUGE_CO2_SZ    140
+#define W7_GAUGE_FEEDER_SZ 140
+#define W7_GX_FILTER       (W7_MARGIN)
+#define W7_GX_TEMP         (W7_GX_FILTER + W7_GAUGE_FILTER_SZ + W7_GAUGE_GAP)
+#define W7_GX_CO2          (W7_GX_TEMP + W7_GAUGE_TEMP_SZ + W7_GAUGE_GAP)
+#define W7_GX_FEEDER       (W7_GX_CO2 + W7_GAUGE_CO2_SZ + W7_GAUGE_GAP)
+/* cockpit_gauge_create() root height = size + 40 */
+#define W7_GAUGE_ROOT_H(sz) ((sz) + 40)
+#define W7_GAUGE_ROW_BOTTOM (W7_GAUGE_ROW_Y + W7_GAUGE_ROOT_H(W7_GAUGE_TEMP_SZ))
+
+#define W7_NAV_H           48
+#define W7_NAV_Y           (W7_SCREEN_H - W7_MARGIN - W7_NAV_H)
+#define W7_CONTENT_Y       (W7_GAUGE_ROW_BOTTOM + W7_GAUGE_GAP)
+#define W7_CONTENT_H       (W7_NAV_Y - W7_GAUGE_GAP - W7_CONTENT_Y)
+
+#define W7_LEFT_COL_W      252
+#define W7_RIGHT_COL_W     272
+#define W7_CENTER_COL_W    (W7_INNER_W - W7_LEFT_COL_W - W7_RIGHT_COL_W - (W7_GAUGE_GAP * 2))
+
+#define W7_LEFT_COL_X      W7_MARGIN
+#define W7_CENTER_COL_X    (W7_LEFT_COL_X + W7_LEFT_COL_W + W7_GAUGE_GAP)
+#define W7_RIGHT_COL_X     (W7_CENTER_COL_X + W7_CENTER_COL_W + W7_GAUGE_GAP)
+
+#define W7_WATER_H         168
+#define W7_REMINDERS_H     (W7_CONTENT_H - W7_WATER_H - W7_GAUGE_GAP)
+
+#define W7_CLOCK_H         88
+#define W7_LIGHT_H         76
+#define W7_SYSTEMS_H       (W7_CONTENT_H - W7_CLOCK_H - W7_LIGHT_H - (W7_GAUGE_GAP * 2))
+
+#define W7_MIN_TOUCH_H     40
+
+static const char *TAG_WIDE = "cockpit_wide";
+
+typedef struct {
+    const char *name;
+    lv_coord_t x;
+    lv_coord_t y;
+    lv_coord_t w;
+    lv_coord_t h;
+    bool touch_target;
+} cockpit_wide_rect_t;
 
 static void tap_heater_cb(lv_event_t *e)
 {
@@ -125,6 +189,33 @@ static void make_water_column(lv_obj_t *panel, lv_coord_t x, const char *name, l
     *badge = make_badge(panel, x, 58);
 }
 
+static bool rects_overlap(const cockpit_wide_rect_t *a, const cockpit_wide_rect_t *b)
+{
+    return (a->x < b->x + b->w) && (a->x + a->w > b->x) && (a->y < b->y + b->h) &&
+           (a->y + a->h > b->y);
+}
+
+#if FISHDUINO_COCKPIT_WIDE_LAYOUT_DEBUG
+static void cockpit_wide_layout_check(const cockpit_wide_rect_t *rects, size_t count)
+{
+    for (size_t i = 0; i < count; i++) {
+        const cockpit_wide_rect_t *r = &rects[i];
+        if (r->x < 0 || r->y < 0 || r->x + r->w > W7_SCREEN_W || r->y + r->h > W7_SCREEN_H) {
+            ESP_LOGW(TAG_WIDE, "bounds: '%s' [%d,%d %dx%d] outside %dx%d", r->name, r->x, r->y, r->w,
+                     r->h, W7_SCREEN_W, W7_SCREEN_H);
+        }
+        if (r->touch_target && r->h < W7_MIN_TOUCH_H) {
+            ESP_LOGW(TAG_WIDE, "touch: '%s' height %d < %d", r->name, r->h, W7_MIN_TOUCH_H);
+        }
+        for (size_t j = i + 1; j < count; j++) {
+            if (rects_overlap(r, &rects[j])) {
+                ESP_LOGW(TAG_WIDE, "overlap: '%s' vs '%s'", r->name, rects[j].name);
+            }
+        }
+    }
+}
+#endif
+
 void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_handles_t *out)
 {
     memset(out, 0, sizeof(*out));
@@ -132,7 +223,7 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_bg_color(parent, lv_color_hex(0x0a0e14), 0);
     lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
 
-    out->banner = make_panel(parent, 8, 4, 1008, 28);
+    out->banner = make_panel(parent, W7_MARGIN, W7_BANNER_Y, W7_INNER_W, W7_BANNER_H);
     lv_obj_set_style_bg_color(out->banner, lv_color_hex(0x331111), 0);
     lv_obj_add_flag(out->banner, LV_OBJ_FLAG_HIDDEN);
     out->lbl_banner = lv_label_create(out->banner);
@@ -145,16 +236,16 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_label_set_text(out->lbl_brand, "FISHDUINO");
     lv_obj_set_style_text_color(out->lbl_brand, cockpit_color_cyan(), 0);
     lv_obj_set_style_text_font(out->lbl_brand, cockpit_font_title(), 0);
-    lv_obj_align(out->lbl_brand, LV_ALIGN_TOP_MID, 0, 28);
+    lv_obj_align(out->lbl_brand, LV_ALIGN_TOP_MID, 0, W7_BRAND_Y);
 
-    cockpit_gauge_create(&out->gauge_filter, parent, 8, 48, 170, "FILTER", "WATTS",
-                         GAUGE_START, GAUGE_END, 0.0f, 30.0f);
+    cockpit_gauge_create(&out->gauge_filter, parent, W7_GX_FILTER, W7_GAUGE_ROW_Y, W7_GAUGE_FILTER_SZ,
+                         "FILTER", "WATTS", GAUGE_START, GAUGE_END, 0.0f, 30.0f);
     cockpit_gauge_set_scale_ticks(&out->gauge_filter, "0", "30W");
     lv_obj_add_flag(out->gauge_filter.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->gauge_filter.root, tap_filter_cb, LV_EVENT_CLICKED, NULL);
 
-    cockpit_gauge_create(&out->gauge_temp, parent, 196, 44, 200, "TEMP", "TANK F",
-                         GAUGE_START, GAUGE_END, 70.0f, 90.0f);
+    cockpit_gauge_create(&out->gauge_temp, parent, W7_GX_TEMP, W7_GAUGE_ROW_Y, W7_GAUGE_TEMP_SZ, "TEMP",
+                         "TANK F", GAUGE_START, GAUGE_END, 70.0f, 90.0f);
     cockpit_gauge_set_scale_ticks(&out->gauge_temp, "70", "90");
     lv_obj_add_flag(out->gauge_temp.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->gauge_temp.root, tap_heater_cb, LV_EVENT_CLICKED, NULL);
@@ -177,18 +268,18 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_text_font(out->lbl_heater_shelly, cockpit_font_small(), 0);
     lv_obj_align(out->lbl_heater_shelly, LV_ALIGN_BOTTOM_MID, 0, -52);
 
-    cockpit_gauge_create(&out->gauge_co2, parent, 412, 48, 170, "CO2", "INJECTION",
-                         GAUGE_START, GAUGE_END, 0.0f, 1.0f);
+    cockpit_gauge_create(&out->gauge_co2, parent, W7_GX_CO2, W7_GAUGE_ROW_Y, W7_GAUGE_CO2_SZ, "CO2",
+                         "INJECTION", GAUGE_START, GAUGE_END, 0.0f, 1.0f);
     cockpit_gauge_set_scale_ticks(&out->gauge_co2, "OFF", "ON");
     lv_obj_add_flag(out->gauge_co2.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->gauge_co2.root, tap_co2_cb, LV_EVENT_CLICKED, NULL);
 
-    cockpit_gauge_create(&out->gauge_feeder, parent, 846, 48, 170, "FEEDER", "SCHEDULE",
-                         GAUGE_START, GAUGE_END, 0.0f, 1.0f);
+    cockpit_gauge_create(&out->gauge_feeder, parent, W7_GX_FEEDER, W7_GAUGE_ROW_Y, W7_GAUGE_FEEDER_SZ,
+                         "FEEDER", "SCHEDULE", GAUGE_START, GAUGE_END, 0.0f, 1.0f);
     lv_obj_add_flag(out->gauge_feeder.root, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->gauge_feeder.root, tap_feeder_cb, LV_EVENT_CLICKED, NULL);
 
-    out->panel_water = make_panel(parent, 8, 198, 260, 168);
+    out->panel_water = make_panel(parent, W7_LEFT_COL_X, W7_CONTENT_Y, W7_LEFT_COL_W, W7_WATER_H);
     panel_title(out->panel_water, "WATER");
     lv_obj_add_flag(out->panel_water, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->panel_water, tap_water_cb, LV_EVENT_CLICKED, NULL);
@@ -202,10 +293,12 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_text_font(out->lbl_water_updated, cockpit_font_small(), 0);
     lv_obj_align(out->lbl_water_updated, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     out->btn_water_view = make_text_btn(out->panel_water, "VIEW ALL", tap_water_cb);
-    lv_obj_set_size(out->btn_water_view, 80, 24);
+    lv_obj_set_size(out->btn_water_view, 80, W7_MIN_TOUCH_H);
     lv_obj_align(out->btn_water_view, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
-    out->panel_reminders = make_panel(parent, 8, 374, 260, 118);
+    const lv_coord_t reminders_y = W7_CONTENT_Y + W7_WATER_H + W7_GAUGE_GAP;
+    out->panel_reminders =
+        make_panel(parent, W7_LEFT_COL_X, reminders_y, W7_LEFT_COL_W, W7_REMINDERS_H);
     panel_title(out->panel_reminders, "REMINDERS");
     lv_obj_add_flag(out->panel_reminders, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->panel_reminders, tap_reminders_cb, LV_EVENT_CLICKED, NULL);
@@ -220,10 +313,11 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_text_font(out->lbl_reminders_next, cockpit_font_small(), 0);
     lv_obj_align(out->lbl_reminders_next, LV_ALIGN_BOTTOM_LEFT, 0, 8);
     out->btn_reminders_view = make_text_btn(out->panel_reminders, "VIEW ALL", tap_reminders_cb);
-    lv_obj_set_size(out->btn_reminders_view, 80, 24);
+    lv_obj_set_size(out->btn_reminders_view, 80, W7_MIN_TOUCH_H);
     lv_obj_align(out->btn_reminders_view, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
-    out->panel_trend = make_panel(parent, 276, 198, 464, 294);
+    out->panel_trend =
+        make_panel(parent, W7_CENTER_COL_X, W7_CONTENT_Y, W7_CENTER_COL_W, W7_CONTENT_H);
     panel_title(out->panel_trend, "TEMP TREND 24H");
     out->lbl_trend_min = lv_label_create(out->panel_trend);
     lv_label_set_text(out->lbl_trend_min, "MIN --");
@@ -237,7 +331,7 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_align(out->lbl_trend_max, LV_ALIGN_TOP_RIGHT, 0, 14);
 
     out->chart_temp = lv_chart_create(out->panel_trend);
-    lv_obj_set_size(out->chart_temp, 448, 248);
+    lv_obj_set_size(out->chart_temp, W7_CENTER_COL_W - 16, W7_CONTENT_H - 28);
     lv_obj_align(out->chart_temp, LV_ALIGN_BOTTOM_MID, 0, -4);
     lv_obj_set_style_bg_color(out->chart_temp, lv_color_hex(0x0c1218), 0);
     lv_obj_set_style_border_color(out->chart_temp, lv_color_hex(0x334455), 0);
@@ -248,7 +342,8 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     out->chart_temp_series = lv_chart_add_series(out->chart_temp, cockpit_color_cyan(),
                                                  LV_CHART_AXIS_PRIMARY_Y);
 
-    out->panel_clock = make_panel(parent, 748, 198, 268, 108);
+    out->panel_clock =
+        make_panel(parent, W7_RIGHT_COL_X, W7_CONTENT_Y, W7_RIGHT_COL_W, W7_CLOCK_H);
     panel_title(out->panel_clock, "CLOCK");
     out->lbl_clock_time = lv_label_create(out->panel_clock);
     lv_label_set_text(out->lbl_clock_time, "--:--");
@@ -273,7 +368,8 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_text_font(mode_lbl, cockpit_font_small(), 0);
     lv_obj_center(mode_lbl);
 
-    out->panel_light = make_panel(parent, 748, 314, 268, 88);
+    const lv_coord_t light_y = W7_CONTENT_Y + W7_CLOCK_H + W7_GAUGE_GAP;
+    out->panel_light = make_panel(parent, W7_RIGHT_COL_X, light_y, W7_RIGHT_COL_W, W7_LIGHT_H);
     panel_title(out->panel_light, "LIGHTING");
     lv_obj_add_flag(out->panel_light, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(out->panel_light, tap_light_cb, LV_EVENT_CLICKED, NULL);
@@ -283,7 +379,7 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_text_font(out->lbl_light_mode, cockpit_font_body(), 0);
     lv_obj_align(out->lbl_light_mode, LV_ALIGN_TOP_LEFT, 0, 18);
     out->bar_light = lv_bar_create(out->panel_light);
-    lv_obj_set_size(out->bar_light, 240, 12);
+    lv_obj_set_size(out->bar_light, W7_RIGHT_COL_W - 32, 12);
     lv_obj_align(out->bar_light, LV_ALIGN_LEFT_MID, 0, 8);
     lv_bar_set_range(out->bar_light, 0, 100);
     lv_obj_set_style_bg_color(out->bar_light, lv_color_hex(0x1a2838), LV_PART_MAIN);
@@ -299,7 +395,9 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
     lv_obj_set_style_text_font(out->lbl_light_sunset, cockpit_font_small(), 0);
     lv_obj_align(out->lbl_light_sunset, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
-    out->panel_systems = make_panel(parent, 748, 408, 268, 184);
+    const lv_coord_t systems_y = light_y + W7_LIGHT_H + W7_GAUGE_GAP;
+    out->panel_systems =
+        make_panel(parent, W7_RIGHT_COL_X, systems_y, W7_RIGHT_COL_W, W7_SYSTEMS_H);
     panel_title(out->panel_systems, "SYSTEMS");
     struct {
         const char *name;
@@ -308,9 +406,9 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
         lv_obj_t **led;
     } sys_leds[] = {
         {"Wi-Fi", 0, 20, &out->led_wifi},
-        {"Shelly CO2", 0, 42, &out->led_co2},
-        {"Filter", 0, 64, &out->led_filter},
-        {"Heater", 0, 86, &out->led_heater},
+        {"Shelly CO2", 0, 38, &out->led_co2},
+        {"Filter", 0, 56, &out->led_filter},
+        {"Heater", 0, 74, &out->led_heater},
         {"BLE", 130, 20, &out->led_ble},
         {"Feeder", 130, 42, &out->led_feeder},
         {"Light", 130, 64, &out->led_light},
@@ -331,8 +429,8 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
 
     out->nav_bar = lv_obj_create(parent);
     cockpit_style_apply_nav_bar(out->nav_bar);
-    lv_obj_set_size(out->nav_bar, 1008, 52);
-    lv_obj_set_pos(out->nav_bar, 8, 536);
+    lv_obj_set_size(out->nav_bar, W7_INNER_W, W7_NAV_H);
+    lv_obj_set_pos(out->nav_bar, W7_MARGIN, W7_NAV_Y);
     lv_obj_set_flex_flow(out->nav_bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(out->nav_bar, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -349,9 +447,10 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
         {"Maint", tap_reminders_cb},
         {"Set", tap_options_cb},
     };
+    const lv_coord_t nav_btn_w = (W7_INNER_W - (NAV_COUNT - 1) * W7_GAUGE_GAP) / NAV_COUNT;
     for (int i = 0; i < NAV_COUNT; i++) {
         out->nav_btns[i] = lv_btn_create(out->nav_bar);
-        lv_obj_set_size(out->nav_btns[i], 150, 40);
+        lv_obj_set_size(out->nav_btns[i], nav_btn_w, W7_MIN_TOUCH_H);
         lv_obj_set_style_bg_color(out->nav_btns[i], lv_color_hex(0x141c24), 0);
         lv_obj_set_style_border_color(out->nav_btns[i], lv_color_hex(0x334455), 0);
         lv_obj_set_style_border_width(out->nav_btns[i], 1, 0);
@@ -364,4 +463,27 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
         lv_obj_set_style_text_color(lbl, cockpit_color_cyan(), 0);
         lv_obj_center(lbl);
     }
+
+#if FISHDUINO_COCKPIT_WIDE_LAYOUT_DEBUG
+    const cockpit_wide_rect_t layout_rects[] = {
+        {"banner", W7_MARGIN, W7_BANNER_Y, W7_INNER_W, W7_BANNER_H, false},
+        {"gauge_filter", W7_GX_FILTER, W7_GAUGE_ROW_Y, W7_GAUGE_FILTER_SZ,
+         W7_GAUGE_ROOT_H(W7_GAUGE_FILTER_SZ), true},
+        {"gauge_temp", W7_GX_TEMP, W7_GAUGE_ROW_Y, W7_GAUGE_TEMP_SZ, W7_GAUGE_ROOT_H(W7_GAUGE_TEMP_SZ),
+         true},
+        {"gauge_co2", W7_GX_CO2, W7_GAUGE_ROW_Y, W7_GAUGE_CO2_SZ, W7_GAUGE_ROOT_H(W7_GAUGE_CO2_SZ),
+         true},
+        {"gauge_feeder", W7_GX_FEEDER, W7_GAUGE_ROW_Y, W7_GAUGE_FEEDER_SZ,
+         W7_GAUGE_ROOT_H(W7_GAUGE_FEEDER_SZ), true},
+        {"panel_water", W7_LEFT_COL_X, W7_CONTENT_Y, W7_LEFT_COL_W, W7_WATER_H, true},
+        {"panel_reminders", W7_LEFT_COL_X, reminders_y, W7_LEFT_COL_W, W7_REMINDERS_H, true},
+        {"panel_trend", W7_CENTER_COL_X, W7_CONTENT_Y, W7_CENTER_COL_W, W7_CONTENT_H, false},
+        {"panel_clock", W7_RIGHT_COL_X, W7_CONTENT_Y, W7_RIGHT_COL_W, W7_CLOCK_H, false},
+        {"panel_light", W7_RIGHT_COL_X, light_y, W7_RIGHT_COL_W, W7_LIGHT_H, true},
+        {"panel_systems", W7_RIGHT_COL_X, systems_y, W7_RIGHT_COL_W, W7_SYSTEMS_H, false},
+        {"nav_bar", W7_MARGIN, W7_NAV_Y, W7_INNER_W, W7_NAV_H, true},
+    };
+    cockpit_wide_layout_check(layout_rects,
+                              sizeof(layout_rects) / sizeof(layout_rects[0]));
+#endif
 }
