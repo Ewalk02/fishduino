@@ -9,7 +9,9 @@ Fishduino is a single codebase for Waveshare **ESP32-P4** aquarium controllers. 
 | **4in** (default) | [ESP32-P4-WIFI6](https://www.waveshare.com/esp32-p4-wifi6.htm) + [4-DSI-TOUCH-A](https://www.waveshare.com/wiki/4-DSI-TOUCH-A) | 480×800 portrait | `./scripts/build-target.sh 4in` |
 | **7b** | [ESP32-P4-WIFI6-7inch-Touch-LCD (B)](https://www.waveshare.com/esp32-p4-wifi6-7inch-touch-lcd-b.htm) | 1024×600 landscape | `./scripts/build-target.sh 7b` |
 
-Both use **RGB565**, **ESP-IDF 5.5.x**, **LVGL**, and an onboard **ESP32-C6** for Wi-Fi 6 / BLE via **ESP-Hosted** (SDIO). The main **cockpit dashboard** picks **compact** (480×800 portrait) or **wide** (1024×600 landscape) layout from the LVGL display resolution after init. **Settings and sub-screens** (OPTIONS, Wi-Fi, Shelly, etc.) still use the compact-style layout on both targets until a future wide pass.
+Both use **RGB565**, **ESP-IDF 5.5.x**, **LVGL**, and an onboard **ESP32-C6** for Wi-Fi 6 / BLE via **ESP-Hosted** (SDIO). The main **cockpit dashboard** picks **compact** (480×800 portrait) or **wide** (1024×600 landscape) layout from the LVGL display resolution after init.
+
+**7B cockpit layout:** The wide dashboard uses a **cockpit-cluster** HMI inspired by an aircraft/industrial panel: large center temperature gauge, filter/CO2 side gauges, smaller tucked feeder and temp-trend elements, and a bottom row of status cards. Some decorative overlap between gauge bezels and the card row is intentional. The 7B dashboard uses a **procedural dark-metal cockpit background** (recessed ribbed panel, top badge accent, frame screws/seams)—no full-screen bitmap. **Settings and sub-screens** (OPTIONS, Wi-Fi, Shelly, etc.) still use the compact-style layout on both targets until a future wide pass.
 
 **Warning:** Selecting the wrong target (e.g. 4in firmware on the 7B panel) can hang or blank the display during BSP init. Always run `build-target.sh` for the board you are flashing.
 
