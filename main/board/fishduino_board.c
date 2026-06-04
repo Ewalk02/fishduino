@@ -15,7 +15,7 @@ static const char *TAG = "fishduino_board";
 
 esp_err_t fishduino_board_init(void)
 {
-    ESP_LOGI(TAG, "Fishduino hardware target: %s", fishduino_board_name());
+    ESP_LOGI(TAG, "AquaPilot hardware target: %s", fishduino_board_name());
     return ESP_OK;
 }
 

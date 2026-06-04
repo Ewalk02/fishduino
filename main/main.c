@@ -108,7 +108,7 @@ static void repl_task(void *arg)
 {
     (void)arg;
     while (true) {
-        char *line = linenoise("fishduino> ");
+        char *line = linenoise("aquapilot> ");
         if (line == NULL) {
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
@@ -155,7 +155,7 @@ static void scheduler_tick(const fishduino_time_snapshot_t *now, void *ctx)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Fishduino starting");
+    ESP_LOGI(TAG, "AquaPilot starting");
 
     fishduino_settings_runtime_init();
     fishduino_settings_get_snapshot(&s_app.settings);

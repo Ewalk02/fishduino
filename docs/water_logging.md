@@ -1,6 +1,6 @@
 # Water test logging and maintenance reminders
 
-Fishduino records **manually entered** aquarium water parameters and tracks recurring maintenance tasks. Readings are **not** sensed automatically — you enter test kit results from the touchscreen or serial console.
+AquaPilot records **manually entered** aquarium water parameters and tracks recurring maintenance tasks. Readings are **not** sensed automatically — you enter test kit results from the touchscreen or serial console.
 
 ## Water parameters
 

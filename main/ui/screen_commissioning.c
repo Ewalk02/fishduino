@@ -17,7 +17,7 @@ static const char *s_steps[] = {
     "4/7: Filter lamp watts\nFilter line should show watts when running",
     "5/7: FILTER IS OFF\nTurn filter plug output off; expect alarm",
     "6/7: FILTER MONITOR OFFLINE\nUnplug filter Shelly or disable Wi-Fi briefly",
-    "7/7: Filter never Switch.Set\nFishduino only polls filter plug (read-only)",
+    "7/7: Filter never Switch.Set\nAquaPilot only polls filter plug (read-only)",
 };
 
 static void refresh_live(void)

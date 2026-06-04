@@ -1,6 +1,6 @@
-# Chihiros aquarium heater — BLE integration (Fishduino P4)
+# Chihiros aquarium heater — BLE integration (AquaPilot P4)
 
-Production path: **one** ESP32-P4 Fishduino firmware talks to the heater over **ESP-Hosted NimBLE** on the onboard ESP32-C6 (same stack as Fluval Plant 4.0). A standalone C6 app under `apps/chihiros_heater_c6/` is **reference/lab only** — not shipped on the coprocessor.
+Production path: **one** ESP32-P4 AquaPilot firmware talks to the heater over **ESP-Hosted NimBLE** on the onboard ESP32-C6 (same stack as Fluval Plant 4.0). A standalone C6 app under `apps/chihiros_heater_c6/` is **reference/lab only** — not shipped on the coprocessor.
 
 ## Device discovery
 

@@ -1,5 +1,5 @@
 #
-# Fishduino shared defaults (all hardware targets)
+# AquaPilot shared defaults (all hardware targets)
 #
 
 CONFIG_IDF_TARGET="esp32p4"

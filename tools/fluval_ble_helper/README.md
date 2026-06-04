@@ -1,14 +1,14 @@
 # Fluval BLE Helper
 
-Standalone ESP-IDF firmware for an ESP32 (C3/S3/WROOM) that controls a **Fluval Plant 4.0** aquarium light over BLE and exposes a simple **UART line protocol** for Fishduino or USB serial testing.
+Standalone ESP-IDF firmware for an ESP32 (C3/S3/WROOM) that controls a **Fluval Plant 4.0** aquarium light over BLE and exposes a simple **UART line protocol** for AquaPilot or USB serial testing.
 
 ```text
-Fishduino ESP32-P4  --UART-->  Fluval BLE Helper  --BLE-->  Fluval Plant 4.0
+AquaPilot ESP32-P4  --UART-->  Fluval BLE Helper  --BLE-->  Fluval Plant 4.0
 ```
 
 ## Purpose
 
-The ESP32-P4 on the Fishduino board does not run a native BLE client in the main firmware. This helper:
+The ESP32-P4 on the AquaPilot board does not run a native BLE client in the main firmware. This helper:
 
 - Scans for and connects to `Plant4.0_450467`
 - Sends confirmed Fluval GATT commands on FFF2
@@ -21,17 +21,17 @@ The ESP32-P4 on the Fishduino board does not run a native BLE client in the main
 
 Flash an ESP32-S3 (or C3) dev board and use `idf.py monitor`. Type commands at the serial prompt (115200 baud).
 
-### Later: wire to Fishduino P4
+### Later: wire to AquaPilot P4
 
-Connect a **second UART** between the helper and Fishduino (not the Fishduino console UART):
+Connect a **second UART** between the helper and AquaPilot (not the AquaPilot console UART):
 
-| Helper | Fishduino P4 |
+| Helper | AquaPilot P4 |
 |--------|----------------|
 | TX | RX (`FISHDUINO_FLUVAL_UART_RX`) |
 | RX | TX (`FISHDUINO_FLUVAL_UART_TX`) |
 | GND | GND |
 
-Set pins in Fishduino [`main/hardware_pins.h`](../main/hardware_pins.h) and enable Fluval in **OPTIONS → Fluval Settings**.
+Set pins in AquaPilot [`main/hardware_pins.h`](../main/hardware_pins.h) and enable Fluval in **OPTIONS → Fluval Settings**.
 
 ## Build and flash
 
@@ -118,6 +118,6 @@ Channels after marker `02 f5`: `03` Pink, `04` Blue, `05` Cold White, `06` White
 - `FLUVAL MODE AUTO` switches to the schedule already saved by the Fluval app
 - Close FluvalConnect and turn off phone Bluetooth while this helper controls the light
 
-## Fishduino integration
+## AquaPilot integration
 
 See the main project [README Fluval section](../README.md). Enable Fluval on the P4, wire UART, and use the same command/response format documented here.

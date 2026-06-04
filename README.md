@@ -1,6 +1,6 @@
-# Fishduino (ESP32-P4)
+# AquaPilot (ESP32-P4)
 
-Fishduino is a single codebase for Waveshare **ESP32-P4** aquarium controllers. Pick a **hardware target** at build time (the firmware does **not** auto-detect the panel before display init).
+AquaPilot is a single codebase for Waveshare **ESP32-P4** aquarium controllers. Pick a **hardware target** at build time (the firmware does **not** auto-detect the panel before display init).
 
 ## Supported hardware targets
 
@@ -34,7 +34,7 @@ idf.py -p /dev/ttyACM0 flash monitor
 
 **Headless mode** (skip display/touch/LVGL) is optional for either target — enable in menuconfig or add `CONFIG_FISHDUINO_HEADLESS=y` to the target defaults. It is **off by default** for both `4in` and `7b`.
 
-**menuconfig:** **Fishduino Configuration → Fishduino board/display target** (must match `build-target.sh`).
+**menuconfig:** **AquaPilot Configuration → AquaPilot board/display target** (must match `build-target.sh`).
 
 Peripheral GPIO (CO2 relay, feeder, etc.) is defined in `main/board/board_4in_pins.h` and `main/board/board_7b_pins.h` (7B assignments are TODO until wired).
 
@@ -77,9 +77,9 @@ idf.py menuconfig
 
 Set:
 
-- **Fishduino Configuration** → **Fishduino board/display target** (4in or 7B)
+- **AquaPilot Configuration** → **AquaPilot board/display target** (4in or 7B)
 - For **4in** only: BSP → **Waveshare 4-DSI-TOUCH-A Display**
-- **Fishduino Configuration** → **WiFi SSID** and **WiFi Password** (first-time / fallback before on-screen save)
+- **AquaPilot Configuration** → **WiFi SSID** and **WiFi Password** (first-time / fallback before on-screen save)
 - `Component config → Wi-Fi Remote` → slave target **esp32c6**
 
 Or press `/` in menuconfig and search for `WiFi SSID`.
@@ -105,7 +105,7 @@ Use when the MIPI DSI display is **not connected** and you want to test serial c
 
 **Enable** (either method):
 
-1. `idf.py menuconfig` → **Fishduino Configuration** → **Headless mode (skip display/touch/LVGL)** → enable
+1. `idf.py menuconfig` → **AquaPilot Configuration** → **Headless mode (skip display/touch/LVGL)** → enable
 2. Uncomment in `sdkconfig.defaults`:
    ```text
    CONFIG_FISHDUINO_HEADLESS=y
@@ -120,7 +120,7 @@ idf.py build
 idf.py -p /dev/ttyACM0 flash monitor
 ```
 
-On boot you should see: `Headless mode enabled: skipping display/touch/LVGL init` and the `fishduino>` prompt.
+On boot you should see: `Headless mode enabled: skipping display/touch/LVGL init` and the `aquapilot>` prompt.
 
 **Disable:** turn off in menuconfig or re-comment the line in `sdkconfig.defaults`, then `rm -f sdkconfig`, `idf.py set-target esp32p4`, and rebuild. Normal builds initialize the touchscreen UI when headless is off (default).
 
@@ -138,7 +138,7 @@ If the board is not detected, hold **BOOT** while tapping **RST** to enter downl
 | Method | When to use |
 |--------|-------------|
 | **OPTIONS → Wi-Fi Settings → SAVE & CONNECT** | Preferred on device; stored in NVS, used every boot |
-| **menuconfig → Fishduino Configuration** | First flash or dev machine fallback until you save from the UI |
+| **menuconfig → AquaPilot Configuration** | First flash or dev machine fallback until you save from the UI |
 
 ## Shelly plug IPs
 
@@ -149,7 +149,7 @@ If the board is not detected, hold **BOOT** while tapping **RST** to enter downl
 
 Also set **CO2/filter enabled**, **switch id** (default 0), and assign static DHCP leases on your router.
 
-**Shelly authentication:** disable LAN authentication on both plugs. Fishduino uses unauthenticated HTTP GET RPC only.
+**Shelly authentication:** disable LAN authentication on both plugs. AquaPilot uses unauthenticated HTTP GET RPC only.
 
 ## First test with lamps, not aquarium equipment
 
@@ -164,7 +164,7 @@ Before connecting a CO2 solenoid or filter pump:
    - Filter watts visible on dashboard
    - Filter plug `output=false` → **FILTER IS OFF**
    - Filter plug offline → **FILTER MONITOR OFFLINE**
-   - Confirm Fishduino never sends `Switch.Set` to the filter plug (step 7 / serial note)
+   - Confirm AquaPilot never sends `Switch.Set` to the filter plug (step 7 / serial note)
 5. Use **FILTER CALIBRATE** (or `filter_calibrate`) with the filter lamp **on** for 30 seconds to set power baseline.
 
 Only after lamps behave correctly, connect real aquarium equipment.
@@ -177,7 +177,7 @@ Default window 09:00–17:00 (local). Edit under **OPTIONS → CO2 Schedule**. E
 
 ## Filter monitoring
 
-Read-only: Fishduino never sends `Switch.Set` to the filter plug. Low-power alarm uses calibrated baseline (50% of baseline, minimum 5 W).
+Read-only: AquaPilot never sends `Switch.Set` to the filter plug. Low-power alarm uses calibrated baseline (50% of baseline, minimum 5 W).
 
 ## Serial commands (`idf.py monitor`)
 
@@ -221,7 +221,7 @@ Production ships **one** image on the ESP32-P4. The onboard ESP32-C6 runs **ESP-
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ ESP32-P4 Fishduino                                          │
+│ ESP32-P4 AquaPilot                                          │
 │  LVGL UI → policy (CO2, maintenance, heater, OTA)           │
 │         → Shelly HTTP (Wi-Fi via hosted)                    │
 │         → ble_central_manager → Fluval / Chihiros drivers   │
@@ -308,8 +308,8 @@ Primary path: P4 NimBLE central → onboard C6 → Fluval BLE (no UART required)
 Optional UART fallback: [`tools/fluval_ble_helper/README.md`](tools/fluval_ble_helper/README.md)
 
 ```text
-Fishduino ESP32-P4  --ESP-Hosted BLE-->  Fluval Plant 4.0
-Fishduino ESP32-P4  --UART (fallback)-->  BLE helper  --BLE-->  Fluval
+AquaPilot ESP32-P4  --ESP-Hosted BLE-->  Fluval Plant 4.0
+AquaPilot ESP32-P4  --UART (fallback)-->  BLE helper  --BLE-->  Fluval
 ```
 
 ### BLE protocol (helper-side)
@@ -332,7 +332,7 @@ Confirmed commands (hex written to FFF2):
 
 Status responses start with `d2b0000e01<mode>02f5...` where mode `00` = Manual, `01` = Auto. LED channels after marker `02 f5`: `03` Pink, `04` Blue, `05` Cold White, `06` White, `07` Warm White.
 
-### Supported in Fishduino
+### Supported in AquaPilot
 
 - Read mode (Manual / Auto) and five channel percentages
 - Set Manual / Auto mode
@@ -394,7 +394,7 @@ FLUVAL ERROR <reason>
 
 Fluval is **disabled by default**. Enable under **OPTIONS → Fluval Settings**. Default transport is **hosted BLE** on the onboard ESP32-C6; UART helper pins in `main/hardware_pins.h` remain placeholders (`-1`) unless using fallback mode. Defaults: target name `Plant4.0_450467`, poll 10 s, stale timeout 30 s.
 
-Close FluvalConnect and turn off phone Bluetooth while Fishduino controls the light.
+Close FluvalConnect and turn off phone Bluetooth while AquaPilot controls the light.
 
 ### Serial commands
 

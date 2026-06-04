@@ -684,7 +684,7 @@ void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_
 
     /* Brand on top for readability */
     out->lbl_brand = lv_label_create(parent);
-    lv_label_set_text(out->lbl_brand, "FISHDUINO");
+    lv_label_set_text(out->lbl_brand, "AQUAPILOT");
     lv_obj_set_style_text_color(out->lbl_brand, cockpit_color_cyan(), 0);
     lv_obj_set_style_text_font(out->lbl_brand, cockpit_font_title(), 0);
     lv_obj_align(out->lbl_brand, LV_ALIGN_TOP_MID, 0, W7_BRAND_Y);

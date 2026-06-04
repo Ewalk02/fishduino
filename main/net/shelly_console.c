@@ -84,7 +84,7 @@ static int cmd_shelly_filter(int argc, char **argv)
     fishduino_shelly_state_t st;
     fishduino_shelly_manager_get_state_snapshot(&st);
     print_status(&st.filter_status, "Filter");
-    printf("read-only: Fishduino never sends Switch.Set to the filter plug\n");
+    printf("read-only: AquaPilot never sends Switch.Set to the filter plug\n");
     return 0;
 }
 

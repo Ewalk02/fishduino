@@ -1,7 +1,7 @@
-menu "Fishduino Configuration"
+menu "AquaPilot Configuration"
 
     choice FISHDUINO_BOARD_TARGET
-        prompt "Fishduino board/display target"
+        prompt "AquaPilot board/display target"
         default FISHDUINO_BOARD_4IN
         help
             Select the Waveshare board + panel at build time.

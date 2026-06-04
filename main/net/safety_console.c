@@ -21,7 +21,7 @@ static int cmd_safety_test(int argc, char **argv)
     fishduino_shelly_manager_get_state_snapshot(&ss);
     fishduino_settings_get_snapshot(&st);
 
-    printf("\n=== Fishduino safety test (use LAMPS, not aquarium gear) ===\n\n");
+    printf("\n=== AquaPilot safety test (use LAMPS, not aquarium gear) ===\n\n");
 
     printf("1) CO2 test lamp ON\n");
     printf("   Action: shelly_co2_on or dashboard CO2 ON\n");
@@ -47,7 +47,7 @@ static int cmd_safety_test(int argc, char **argv)
     printf("6) Filter offline -> FILTER MONITOR OFFLINE\n");
     printf("   Action: unplug filter Shelly or disconnect Wi-Fi\n\n");
 
-    printf("7) Fishduino never Switch.Set on filter plug\n");
+    printf("7) AquaPilot never Switch.Set on filter plug\n");
     printf("   CO2 IP: %s (enabled=%s id=%d)\n", st.shelly_co2.ip, st.shelly_co2.enabled ? "yes" : "no",
            (int)st.shelly_co2.switch_id);
     printf("   Filter IP: %s (enabled=%s id=%d) READ-ONLY\n", st.shelly_filter.ip,

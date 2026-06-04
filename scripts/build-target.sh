@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Select Fishduino hardware target (4" DSI dev board or 7B integrated LCD) and build.
+# Select AquaPilot hardware target (4" DSI dev board or 7B integrated LCD) and build.
 set -euo pipefail
 
 usage() {
@@ -30,7 +30,7 @@ source "${SCRIPT_DIR}/fishduino-env.sh"
 
 cd "${PROJECT_DIR}"
 
-echo "==> Fishduino target: ${TARGET}"
+echo "==> AquaPilot target: ${TARGET}"
 
 if [[ -f sdkconfig ]]; then
     BACKUP="sdkconfig.backup.$(date +%Y%m%d_%H%M%S)"
