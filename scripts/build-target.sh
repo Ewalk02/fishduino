@@ -56,6 +56,18 @@ rm -f sdkconfig
 echo "==> idf.py set-target esp32p4"
 idf.py set-target esp32p4
 
+# Managed-component Kconfig (esp_wifi_remote slave target, etc.) is not fully
+# applied on the first pass; reconfigure so sdkconfig matches component defaults.
+echo "==> idf.py reconfigure (apply esp_wifi_remote / ESP-Hosted Kconfig)"
+idf.py reconfigure
+
+if ! grep -q '^CONFIG_SLAVE_IDF_TARGET_ESP32C6=y' sdkconfig; then
+    echo "ERROR: CONFIG_SLAVE_IDF_TARGET_ESP32C6 is not set in sdkconfig."
+    echo "       ESP-Hosted needs the onboard ESP32-C6 slave target (SDIO)."
+    grep -E 'CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_HOST_WIFI_ENABLED|CONFIG_ESP_HOSTED_ENABLED' sdkconfig || true
+    exit 1
+fi
+
 if [[ "${RECONFIGURE_ONLY}" -eq 1 ]]; then
     echo "==> Reconfigure complete for target ${TARGET}"
     exit 0

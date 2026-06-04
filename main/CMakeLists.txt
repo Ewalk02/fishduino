@@ -68,6 +68,8 @@ else()
 endif()
 
 set(fishduino_requires
+  espressif__esp_wifi_remote
+  espressif__esp_hosted
   esp_wifi
   esp_netif
   esp_event
