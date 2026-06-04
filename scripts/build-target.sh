@@ -48,7 +48,16 @@ cp "${DEPS_DIR}/idf_component.full.${TARGET}.yml" "${PROJECT_DIR}/idf_component.
 
 if [[ -d managed_components ]]; then
     echo "==> Note: removing managed_components/ so the Component Manager fetches the correct BSP"
-    rm -rf managed_components dependencies.lock
+    rm -rf managed_components
+fi
+
+LOCK_SRC="${DEPS_DIR}/dependencies.lock.${TARGET}"
+if [[ -f "${LOCK_SRC}" ]]; then
+    echo "==> Using pinned dependencies.lock.${TARGET}"
+    cp "${LOCK_SRC}" "${PROJECT_DIR}/dependencies.lock"
+else
+    echo "==> No dependencies.lock.${TARGET}; Component Manager will solve dependencies"
+    rm -f dependencies.lock
 fi
 
 rm -f sdkconfig
@@ -61,9 +70,33 @@ idf.py set-target esp32p4
 echo "==> idf.py reconfigure (apply esp_wifi_remote / ESP-Hosted Kconfig)"
 idf.py reconfigure
 
-if ! grep -q '^CONFIG_SLAVE_IDF_TARGET_ESP32C6=y' sdkconfig; then
-    echo "ERROR: CONFIG_SLAVE_IDF_TARGET_ESP32C6 is not set in sdkconfig."
-    echo "       ESP-Hosted needs the onboard ESP32-C6 slave target (SDIO)."
+echo "==> ESP Hosted / Wi-Fi Remote versions"
+grep -n "esp_wifi_remote" dependencies.lock main/idf_component.yml idf_component.yml 2>/dev/null || true
+grep -n "esp_hosted" dependencies.lock main/idf_component.yml idf_component.yml 2>/dev/null || true
+
+echo "==> ESP Hosted / Wi-Fi Remote sdkconfig"
+grep -E 'ESP_WIFI_REMOTE|ESP_HOSTED|SLAVE_IDF_TARGET|ESP_HOSTED_CP_TARGET|ESP_HOSTED_IDF_SLAVE|WIFI_RMT' sdkconfig || true
+
+echo "==> esp_wifi_remote Kconfig dirs"
+find managed_components/espressif__esp_wifi_remote -maxdepth 2 -type d -name 'idf*' -print 2>/dev/null || true
+
+echo "==> esp_wifi_remote Kconfig source lines"
+grep -nE 'orsource|rsource|source|ESP_IDF_VERSION|Kconfig.slave|SLAVE_IDF_TARGET|WIFI_RMT' \
+    managed_components/espressif__esp_wifi_remote/Kconfig 2>/dev/null || true
+
+slave_ok=0
+if grep -q '^CONFIG_SLAVE_IDF_TARGET_ESP32C6=y' sdkconfig; then
+    slave_ok=1
+fi
+if grep -q '^CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y' sdkconfig; then
+    slave_ok=1
+fi
+if grep -q '^CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET="esp32c6"' sdkconfig; then
+    slave_ok=1
+fi
+if [[ "${slave_ok}" -eq 0 ]]; then
+    echo "ERROR: ESP32-C6 coprocessor target is not configured in sdkconfig."
+    echo "       ESP-Hosted needs the onboard ESP32-C6 slave (SDIO)."
     grep -E 'CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_HOST_WIFI_ENABLED|CONFIG_ESP_HOSTED_ENABLED' sdkconfig || true
     exit 1
 fi
