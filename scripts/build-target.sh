@@ -38,10 +38,9 @@ if [[ -f sdkconfig ]]; then
     cp sdkconfig "${BACKUP}"
 fi
 
-echo "==> Writing sdkconfig.defaults (common + ${TARGET} + hosted)"
+echo "==> Writing sdkconfig.defaults (common + ${TARGET}; hosted applied after set-target)"
 cat "${PROJECT_DIR}/sdkconfig.defaults.common" \
     "${PROJECT_DIR}/sdkconfig.defaults.${TARGET}" \
-    "${PROJECT_DIR}/sdkconfig.defaults.hosted" \
     > "${PROJECT_DIR}/sdkconfig.defaults"
 
 echo "==> Installing idf_component.yml for ${TARGET} (main/ and project root)"
@@ -67,10 +66,25 @@ rm -f sdkconfig
 echo "==> idf.py set-target esp32p4"
 idf.py set-target esp32p4
 
-# First cmake pass can write sdkconfig before managed-component Kconfig is complete
-# (e.g. ESP_HOSTED_CP_TARGET_ESP32H2). Regenerate from merged sdkconfig.defaults (incl. hosted).
-echo "==> Regenerating sdkconfig (full esp_wifi_remote / ESP-Hosted Kconfig tree)"
-rm -f sdkconfig
+# Project sdkconfig.defaults is loaded before managed-component Kconfig exists on CI, so
+# hosted symbols (SLAVE_IDF_TARGET_*, WIFI_RMT_*) are ignored if merged into defaults.
+# After set-target, components are on disk: strip first-pass H2/SPI choices and apply hosted.
+echo "==> Applying ESP-Hosted sdkconfig (C6 + SDIO)"
+sed -i \
+    -e '/^CONFIG_ESP_HOSTED_CP_TARGET_/d' \
+    -e '/^# CONFIG_ESP_HOSTED_CP_TARGET_/d' \
+    -e '/^CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET=/d' \
+    -e '/^CONFIG_ESP_HOSTED_.*HOST_INTERFACE/d' \
+    -e '/^# CONFIG_ESP_HOSTED_.*HOST_INTERFACE/d' \
+    -e '/^CONFIG_ESP_HOSTED_SPI_/d' \
+    -e '/^# CONFIG_ESP_HOSTED_SPI_/d' \
+    -e '/^CONFIG_ESP_HOSTED_PRIV_SPI/d' \
+    -e '/^CONFIG_SLAVE_IDF_TARGET_/d' \
+    -e '/^# CONFIG_SLAVE_IDF_TARGET_/d' \
+    -e '/^CONFIG_ESP_WIFI_REMOTE_/d' \
+    -e '/^CONFIG_WIFI_RMT_/d' \
+    sdkconfig
+cat "${PROJECT_DIR}/sdkconfig.defaults.hosted" >> sdkconfig
 idf.py reconfigure
 
 echo "==> ESP Hosted / Wi-Fi Remote versions"
