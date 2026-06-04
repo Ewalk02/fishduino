@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Select AquaPilot hardware target (4" DSI dev board or 7B integrated LCD) and build.
+#
+# ESP-Hosted flow (see also fishduino-env.sh ESP_IDF_VERSION normalization):
+#   1. Generate sdkconfig.defaults from common + target (no hosted lines yet).
+#   2. Copy target idf_component.yml / dependencies.lock; idf.py set-target.
+#   3. First reconfigure — full managed-component Kconfig tree.
+#   4. Patch sdkconfig from sdkconfig.defaults.hosted (C6 + SDIO + buffers).
+#   5. Second reconfigure; verify C6/SDIO and reject H2/SPI; build.
+# Tracked files touched for the build are restored on exit (see restore trap).
 set -euo pipefail
 
 usage() {
@@ -25,10 +33,54 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEPS_DIR="${PROJECT_DIR}/dependencies"
 
+BUILD_TRACKED_PATHS=(
+    dependencies.lock
+    idf_component.yml
+    main/idf_component.yml
+    sdkconfig.defaults
+)
+BUILD_TRACKED_RESTORE_DIR=""
+
+tracked_backup_name() {
+    echo "${1//\//__}"
+}
+
+backup_tracked_build_files() {
+    BUILD_TRACKED_RESTORE_DIR="$(mktemp -d)"
+    local path name
+    for path in "${BUILD_TRACKED_PATHS[@]}"; do
+        name="$(tracked_backup_name "${path}")"
+        if [[ -e "${path}" ]]; then
+            cp -a "${path}" "${BUILD_TRACKED_RESTORE_DIR}/${name}"
+            touch "${BUILD_TRACKED_RESTORE_DIR}/${name}.existed"
+        fi
+    done
+}
+
+restore_tracked_build_files() {
+    local path name
+    if [[ -z "${BUILD_TRACKED_RESTORE_DIR}" || ! -d "${BUILD_TRACKED_RESTORE_DIR}" ]]; then
+        return 0
+    fi
+    for path in "${BUILD_TRACKED_PATHS[@]}"; do
+        name="$(tracked_backup_name "${path}")"
+        if [[ -f "${BUILD_TRACKED_RESTORE_DIR}/${name}.existed" ]]; then
+            cp -a "${BUILD_TRACKED_RESTORE_DIR}/${name}" "${path}"
+        else
+            rm -f "${path}"
+        fi
+    done
+    rm -rf "${BUILD_TRACKED_RESTORE_DIR}"
+    BUILD_TRACKED_RESTORE_DIR=""
+}
+
 # shellcheck source=fishduino-env.sh
 source "${SCRIPT_DIR}/fishduino-env.sh"
 
 cd "${PROJECT_DIR}"
+
+backup_tracked_build_files
+trap restore_tracked_build_files EXIT
 
 echo "==> AquaPilot target: ${TARGET}"
 
@@ -38,7 +90,7 @@ if [[ -f sdkconfig ]]; then
     cp sdkconfig "${BACKUP}"
 fi
 
-echo "==> Writing sdkconfig.defaults (common + ${TARGET}; hosted applied after set-target)"
+echo "==> Writing sdkconfig.defaults (common + ${TARGET}; hosted via patch after first reconfigure)"
 cat "${PROJECT_DIR}/sdkconfig.defaults.common" \
     "${PROJECT_DIR}/sdkconfig.defaults.${TARGET}" \
     > "${PROJECT_DIR}/sdkconfig.defaults"
@@ -66,7 +118,7 @@ rm -f sdkconfig
 echo "==> idf.py set-target esp32p4"
 idf.py set-target esp32p4
 
-# Apply Wi-Fi Remote buffer defaults after managed components exist (see sdkconfig.defaults.hosted).
+# Strip stale first-pass ESP-Hosted / esp_wifi_remote lines, then append sdkconfig.defaults.hosted.
 apply_esp_hosted_sdkconfig() {
     sed -i \
         -e '/^CONFIG_ESP_HOSTED_CP_TARGET_/d' \
@@ -85,11 +137,9 @@ apply_esp_hosted_sdkconfig() {
     cat "${PROJECT_DIR}/sdkconfig.defaults.hosted" >> sdkconfig
 }
 
-# First reconfigure: full managed-component Kconfig (FISHDUINO_ESP_HOSTED_C6_SDIO selects SLAVE C6).
-echo "==> idf.py reconfigure (resolve ESP-Hosted Kconfig)"
+echo "==> idf.py reconfigure (managed-component Kconfig tree)"
 idf.py reconfigure
 
-# Second pass: sdkconfig.defaults.hosted buffer sizes + explicit C6/SDIO (choice symbols; patch after Kconfig exists).
 echo "==> Applying ESP-Hosted sdkconfig (C6 + SDIO + Wi-Fi Remote buffers)"
 apply_esp_hosted_sdkconfig
 if ! grep -q '^CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y' sdkconfig; then
