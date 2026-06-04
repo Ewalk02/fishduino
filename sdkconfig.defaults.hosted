@@ -1,4 +1,7 @@
-# ESP-Hosted / esp_wifi_remote (main component; symbols available once deps resolve)
+#
+# ESP-Hosted Wi-Fi (ESP32-C6 coprocessor over SDIO via esp_wifi_remote 1.6.x)
+#
+
 CONFIG_ESP_WIFI_REMOTE_ENABLED=y
 CONFIG_ESP_WIFI_REMOTE_LIBRARY_HOSTED=y
 CONFIG_SLAVE_IDF_TARGET_ESP32C6=y

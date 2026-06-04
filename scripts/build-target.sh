@@ -38,9 +38,11 @@ if [[ -f sdkconfig ]]; then
     cp sdkconfig "${BACKUP}"
 fi
 
-echo "==> Writing sdkconfig.defaults (common + ${TARGET})"
+echo "==> Writing sdkconfig.defaults (common + ${TARGET} + hosted)"
 cat "${PROJECT_DIR}/sdkconfig.defaults.common" \
-    "${PROJECT_DIR}/sdkconfig.defaults.${TARGET}" > "${PROJECT_DIR}/sdkconfig.defaults"
+    "${PROJECT_DIR}/sdkconfig.defaults.${TARGET}" \
+    "${PROJECT_DIR}/sdkconfig.defaults.hosted" \
+    > "${PROJECT_DIR}/sdkconfig.defaults"
 
 echo "==> Installing idf_component.yml for ${TARGET} (main/ and project root)"
 cp "${DEPS_DIR}/idf_component.full.${TARGET}.yml" "${PROJECT_DIR}/main/idf_component.yml"
@@ -66,7 +68,7 @@ echo "==> idf.py set-target esp32p4"
 idf.py set-target esp32p4
 
 # First cmake pass can write sdkconfig before managed-component Kconfig is complete
-# (e.g. ESP_HOSTED_CP_TARGET_ESP32H2). Regenerate from defaults + main/sdkconfig.defaults.
+# (e.g. ESP_HOSTED_CP_TARGET_ESP32H2). Regenerate from merged sdkconfig.defaults (incl. hosted).
 echo "==> Regenerating sdkconfig (full esp_wifi_remote / ESP-Hosted Kconfig tree)"
 rm -f sdkconfig
 idf.py reconfigure
@@ -76,7 +78,7 @@ grep -n "esp_wifi_remote" dependencies.lock main/idf_component.yml idf_component
 grep -n "esp_hosted" dependencies.lock main/idf_component.yml idf_component.yml 2>/dev/null || true
 
 echo "==> ESP Hosted / Wi-Fi Remote sdkconfig"
-grep -E 'ESP_WIFI_REMOTE|ESP_HOSTED|SLAVE_IDF_TARGET|ESP_HOSTED_CP_TARGET|ESP_HOSTED_IDF_SLAVE|WIFI_RMT' sdkconfig || true
+grep -E 'ESP_WIFI_REMOTE|ESP_HOSTED|SLAVE_IDF_TARGET|ESP_HOSTED_CP_TARGET|ESP_HOSTED_IDF_SLAVE|HOST_INTERFACE|WIFI_RMT' sdkconfig || true
 
 echo "==> esp_wifi_remote Kconfig dirs"
 find managed_components/espressif__esp_wifi_remote -maxdepth 2 -type d -name 'idf*' -print 2>/dev/null || true
@@ -95,10 +97,24 @@ fi
 if grep -q '^CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET="esp32c6"' sdkconfig; then
     slave_ok=1
 fi
+if grep -q '^CONFIG_ESP_HOSTED_CP_TARGET_ESP32H2=y' sdkconfig \
+    || grep -q '^CONFIG_ESP_HOSTED_SPI_HOST_INTERFACE=y' sdkconfig; then
+    echo "ERROR: sdkconfig selected wrong ESP-Hosted coprocessor or transport."
+    echo "       Expected ESP32-C6 over SDIO; found H2 and/or SPI in sdkconfig:"
+    grep -E 'ESP_WIFI_REMOTE|ESP_HOSTED|SLAVE_IDF_TARGET|ESP_HOSTED_CP_TARGET|ESP_HOSTED_IDF_SLAVE|HOST_INTERFACE|WIFI_RMT' sdkconfig || true
+    exit 1
+fi
+
+if ! grep -q '^CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE=y' sdkconfig; then
+    echo "ERROR: CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE is not set in sdkconfig."
+    grep -E 'ESP_WIFI_REMOTE|ESP_HOSTED|SLAVE_IDF_TARGET|ESP_HOSTED_CP_TARGET|ESP_HOSTED_IDF_SLAVE|HOST_INTERFACE|WIFI_RMT' sdkconfig || true
+    exit 1
+fi
+
 if [[ "${slave_ok}" -eq 0 ]]; then
     echo "ERROR: ESP32-C6 coprocessor target is not configured in sdkconfig."
     echo "       ESP-Hosted needs the onboard ESP32-C6 slave (SDIO)."
-    grep -E 'CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_HOST_WIFI_ENABLED|CONFIG_ESP_HOSTED_ENABLED' sdkconfig || true
+    grep -E 'ESP_WIFI_REMOTE|ESP_HOSTED|SLAVE_IDF_TARGET|ESP_HOSTED_CP_TARGET|ESP_HOSTED_IDF_SLAVE|HOST_INTERFACE|WIFI_RMT' sdkconfig || true
     exit 1
 fi
 
