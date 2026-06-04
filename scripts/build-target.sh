@@ -66,25 +66,37 @@ rm -f sdkconfig
 echo "==> idf.py set-target esp32p4"
 idf.py set-target esp32p4
 
-# Project sdkconfig.defaults is loaded before managed-component Kconfig exists on CI, so
-# hosted symbols (SLAVE_IDF_TARGET_*, WIFI_RMT_*) are ignored if merged into defaults.
-# After set-target, components are on disk: strip first-pass H2/SPI choices and apply hosted.
-echo "==> Applying ESP-Hosted sdkconfig (C6 + SDIO)"
-sed -i \
-    -e '/^CONFIG_ESP_HOSTED_CP_TARGET_/d' \
-    -e '/^# CONFIG_ESP_HOSTED_CP_TARGET_/d' \
-    -e '/^CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET=/d' \
-    -e '/^CONFIG_ESP_HOSTED_.*HOST_INTERFACE/d' \
-    -e '/^# CONFIG_ESP_HOSTED_.*HOST_INTERFACE/d' \
-    -e '/^CONFIG_ESP_HOSTED_SPI_/d' \
-    -e '/^# CONFIG_ESP_HOSTED_SPI_/d' \
-    -e '/^CONFIG_ESP_HOSTED_PRIV_SPI/d' \
-    -e '/^CONFIG_SLAVE_IDF_TARGET_/d' \
-    -e '/^# CONFIG_SLAVE_IDF_TARGET_/d' \
-    -e '/^CONFIG_ESP_WIFI_REMOTE_/d' \
-    -e '/^CONFIG_WIFI_RMT_/d' \
-    sdkconfig
-cat "${PROJECT_DIR}/sdkconfig.defaults.hosted" >> sdkconfig
+# Apply Wi-Fi Remote buffer defaults after managed components exist (see sdkconfig.defaults.hosted).
+apply_esp_hosted_sdkconfig() {
+    sed -i \
+        -e '/^CONFIG_ESP_HOSTED_CP_TARGET_/d' \
+        -e '/^# CONFIG_ESP_HOSTED_CP_TARGET_/d' \
+        -e '/^CONFIG_ESP_HOSTED_IDF_SLAVE_TARGET=/d' \
+        -e '/^CONFIG_ESP_HOSTED_.*HOST_INTERFACE/d' \
+        -e '/^# CONFIG_ESP_HOSTED_.*HOST_INTERFACE/d' \
+        -e '/^CONFIG_ESP_HOSTED_SPI_/d' \
+        -e '/^# CONFIG_ESP_HOSTED_SPI_/d' \
+        -e '/^CONFIG_ESP_HOSTED_PRIV_SPI/d' \
+        -e '/^CONFIG_SLAVE_IDF_TARGET_/d' \
+        -e '/^# CONFIG_SLAVE_IDF_TARGET_/d' \
+        -e '/^CONFIG_ESP_WIFI_REMOTE_/d' \
+        -e '/^CONFIG_WIFI_RMT_/d' \
+        sdkconfig
+    cat "${PROJECT_DIR}/sdkconfig.defaults.hosted" >> sdkconfig
+}
+
+# First reconfigure: full managed-component Kconfig (FISHDUINO_ESP_HOSTED_C6_SDIO selects SLAVE C6).
+echo "==> idf.py reconfigure (resolve ESP-Hosted Kconfig)"
+idf.py reconfigure
+
+# Second pass: sdkconfig.defaults.hosted buffer sizes + explicit C6/SDIO (choice symbols; patch after Kconfig exists).
+echo "==> Applying ESP-Hosted sdkconfig (C6 + SDIO + Wi-Fi Remote buffers)"
+apply_esp_hosted_sdkconfig
+if ! grep -q '^CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y' sdkconfig; then
+    echo "ERROR: sdkconfig patch did not add CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6"
+    tail -20 sdkconfig
+    exit 1
+fi
 idf.py reconfigure
 
 echo "==> ESP Hosted / Wi-Fi Remote versions"

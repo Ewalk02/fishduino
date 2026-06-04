@@ -1,5 +1,15 @@
 menu "AquaPilot Configuration"
 
+    # Waveshare ESP32-P4-WIFI6 boards use an onboard ESP32-C6 over SDIO.
+    # Project sdkconfig.defaults loads before managed-component Kconfig on CI, so
+    # SLAVE_IDF_TARGET_* / WIFI_RMT_* lines there are ignored; select from main.
+    config FISHDUINO_ESP_HOSTED_C6_SDIO
+        bool
+        default y
+        select ESP_WIFI_REMOTE_ENABLED
+        select ESP_WIFI_REMOTE_LIBRARY_HOSTED
+        select SLAVE_IDF_TARGET_ESP32C6
+
     choice FISHDUINO_BOARD_TARGET
         prompt "AquaPilot board/display target"
         default FISHDUINO_BOARD_4IN
