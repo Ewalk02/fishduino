@@ -1,4 +1,29 @@
-menu "Fishduino Configuration"
+menu "AquaPilot Configuration"
+
+    # Waveshare ESP32-P4-WIFI6 boards use an onboard ESP32-C6 over SDIO.
+    # Coprocessor/transport (SLAVE_IDF_TARGET_*, ESP_HOSTED_*) are set via
+    # sdkconfig.defaults.hosted in scripts/build-target.sh after managed-component
+    # Kconfig exists—not via select on external choice symbols.
+    config FISHDUINO_ESP_HOSTED_C6_SDIO
+        bool "ESP-Hosted: ESP32-C6 coprocessor over SDIO (Waveshare P4)"
+        default y
+        help
+            Project marker for Waveshare P4 + onboard C6. Actual ESP-Hosted and
+            esp_wifi_remote options are applied by the build script.
+
+    choice FISHDUINO_BOARD_TARGET
+        prompt "AquaPilot board/display target"
+        default FISHDUINO_BOARD_4IN
+        help
+            Select the Waveshare board + panel at build time.
+            The firmware does not auto-detect the panel before display init.
+
+        config FISHDUINO_BOARD_4IN
+            bool "ESP32-P4-WIFI6 + 4 inch DSI Touch (480x800 portrait)"
+
+        config FISHDUINO_BOARD_7B
+            bool "ESP32-P4-WIFI6-7inch-Touch-LCD (B) (1024x600 landscape)"
+    endchoice
 
     config ESP_WIFI_SSID
         string "WiFi SSID"

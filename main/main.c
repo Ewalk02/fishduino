@@ -15,7 +15,8 @@
 #include "sdkconfig.h"
 
 #if !CONFIG_FISHDUINO_HEADLESS
-#include "bsp/esp32_p4_platform.h"
+#include "board/fishduino_board.h"
+#include "ui/fishduino_ui_layout.h"
 #include "ui/ui.h"
 #endif
 
@@ -107,7 +108,7 @@ static void repl_task(void *arg)
 {
     (void)arg;
     while (true) {
-        char *line = linenoise("fishduino> ");
+        char *line = linenoise("aquapilot> ");
         if (line == NULL) {
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
@@ -143,18 +144,18 @@ static void scheduler_tick(const fishduino_time_snapshot_t *now, void *ctx)
     }
 
 #if !CONFIG_FISHDUINO_HEADLESS
-    if (!bsp_display_lock(50)) {
+    if (!fishduino_display_lock(50)) {
         return;
     }
 
     fishduino_ui_update((fishduino_ui_t *)app->ui, &app->co2, &app->feeder, &app->settings);
-    bsp_display_unlock();
+    fishduino_display_unlock();
 #endif
 }
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Fishduino starting");
+    ESP_LOGI(TAG, "AquaPilot starting");
 
     fishduino_settings_runtime_init();
     fishduino_settings_get_snapshot(&s_app.settings);
@@ -189,14 +190,18 @@ void app_main(void)
     ESP_LOGI(TAG, "Headless mode enabled: skipping display/touch/LVGL init");
     s_app.ui = NULL;
 #else
-    ESP_LOGI(TAG, "Init display + touch + LVGL (BSP)");
-    lv_display_t *disp = bsp_display_start();
+    ESP_ERROR_CHECK(fishduino_board_init());
+
+    ESP_LOGI(TAG, "Init display + touch + LVGL (board BSP)");
+    lv_display_t *disp = fishduino_display_start();
     if (disp == NULL) {
-        ESP_LOGE(TAG, "bsp_display_start() failed");
+        ESP_LOGE(TAG, "fishduino_display_start() failed");
         return;
     }
 
-    bsp_display_backlight_on();
+    fishduino_display_backlight_on();
+    fishduino_board_log_status();
+    ESP_LOGI(TAG, "UI layout mode: %s", fishduino_ui_layout_name(fishduino_ui_get_layout()));
 
     static fishduino_ui_t s_ui;
     memset(&s_ui, 0, sizeof(s_ui));

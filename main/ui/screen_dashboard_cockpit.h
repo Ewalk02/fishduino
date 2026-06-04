@@ -70,7 +70,7 @@ typedef struct {
     lv_obj_t *nav_btns[6];
 } fishduino_cockpit_handles_t;
 
-void fishduino_cockpit_dashboard_build(lv_obj_t *parent, fishduino_cockpit_handles_t *out);
+fishduino_cockpit_handles_t fishduino_cockpit_dashboard_build(lv_obj_t *parent);
 void fishduino_cockpit_dashboard_update(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *snap);
 
 #ifdef __cplusplus

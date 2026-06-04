@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "fishduino_ui_layout.h"
+
 #include "screen_co2_schedule.h"
 #include "screen_fluval_settings.h"
 #include "screen_heater_settings.h"
@@ -180,7 +182,9 @@ static void make_water_column(lv_obj_t *panel, lv_coord_t x, const char *name, l
     *badge = make_badge(panel, x, 58);
 }
 
-void fishduino_cockpit_dashboard_build(lv_obj_t *parent, fishduino_cockpit_handles_t *out)
+void fishduino_cockpit_dashboard_build_wide(lv_obj_t *parent, fishduino_cockpit_handles_t *out);
+
+static void fishduino_cockpit_dashboard_build_compact(lv_obj_t *parent, fishduino_cockpit_handles_t *out)
 {
     memset(out, 0, sizeof(*out));
 
@@ -197,7 +201,7 @@ void fishduino_cockpit_dashboard_build(lv_obj_t *parent, fishduino_cockpit_handl
     lv_obj_center(out->lbl_banner);
 
     out->lbl_brand = lv_label_create(parent);
-    lv_label_set_text(out->lbl_brand, "FISHDUINO");
+    lv_label_set_text(out->lbl_brand, "AQUAPILOT");
     lv_obj_set_style_text_color(out->lbl_brand, cockpit_color_cyan(), 0);
     lv_obj_set_style_text_font(out->lbl_brand, cockpit_font_title(), 0);
     lv_obj_align(out->lbl_brand, LV_ALIGN_TOP_MID, 0, 34);
@@ -418,6 +422,19 @@ void fishduino_cockpit_dashboard_build(lv_obj_t *parent, fishduino_cockpit_handl
         lv_obj_center(lbl);
     }
 
+}
+
+fishduino_cockpit_handles_t fishduino_cockpit_dashboard_build(lv_obj_t *parent)
+{
+    fishduino_cockpit_handles_t out = {0};
+
+    if (fishduino_ui_get_layout() == FISHDUINO_UI_LAYOUT_WIDE) {
+        fishduino_cockpit_dashboard_build_wide(parent, &out);
+    } else {
+        fishduino_cockpit_dashboard_build_compact(parent, &out);
+    }
+
+    return out;
 }
 
 static void update_temp_chart(fishduino_cockpit_handles_t *h, const dashboard_snapshot_t *s)
