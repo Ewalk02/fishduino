@@ -28,4 +28,10 @@ if ! command -v idf.py >/dev/null 2>&1; then
     exit 1
 fi
 
+# install-esp-idf-action sets ESP_IDF_VERSION=5.5.4; esp_wifi_remote orsources
+# Kconfig.idf_v${ESP_IDF_VERSION}.in (e.g. idf_v5.5.in). Patch releases must use major.minor.
+if [[ "${ESP_IDF_VERSION:-}" =~ ^([0-9]+\.[0-9]+)\.[0-9]+$ ]]; then
+    export ESP_IDF_VERSION="${BASH_REMATCH[1]}"
+fi
+
 idf.py --version
