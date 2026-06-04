@@ -65,9 +65,10 @@ rm -f sdkconfig
 echo "==> idf.py set-target esp32p4"
 idf.py set-target esp32p4
 
-# Managed-component Kconfig (esp_wifi_remote slave target, etc.) is not fully
-# applied on the first pass; reconfigure so sdkconfig matches component defaults.
-echo "==> idf.py reconfigure (apply esp_wifi_remote / ESP-Hosted Kconfig)"
+# First cmake pass can write sdkconfig before managed-component Kconfig is complete
+# (e.g. ESP_HOSTED_CP_TARGET_ESP32H2). Regenerate from defaults + main/sdkconfig.defaults.
+echo "==> Regenerating sdkconfig (full esp_wifi_remote / ESP-Hosted Kconfig tree)"
+rm -f sdkconfig
 idf.py reconfigure
 
 echo "==> ESP Hosted / Wi-Fi Remote versions"
@@ -99,6 +100,16 @@ if [[ "${slave_ok}" -eq 0 ]]; then
     echo "       ESP-Hosted needs the onboard ESP32-C6 slave (SDIO)."
     grep -E 'CONFIG_ESP_WIFI_REMOTE_ENABLED|CONFIG_ESP_HOST_WIFI_ENABLED|CONFIG_ESP_HOSTED_ENABLED' sdkconfig || true
     exit 1
+fi
+
+# ESP_HOSTED_ENABLE_BT_NIMBLE lives under a Kconfig 'if' tree; set after BT options exist in sdkconfig.
+if ! grep -q '^CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE=y' sdkconfig; then
+    echo "==> Enabling ESP-Hosted NimBLE VHCI in sdkconfig"
+    cat >> sdkconfig <<'EOF'
+CONFIG_ESP_HOSTED_ENABLE_BT_NIMBLE=y
+CONFIG_ESP_HOSTED_NIMBLE_HCI_VHCI=y
+EOF
+    idf.py reconfigure
 fi
 
 if [[ "${RECONFIGURE_ONLY}" -eq 1 ]]; then
