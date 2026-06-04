@@ -7,6 +7,8 @@ managed_components/
 sdkconfig
 sdkconfig.old
 sdkconfig.*.old
+sdkconfig.backup.*
+sdkconfig.restored*
 apps/*/sdkconfig
 apps/*/sdkconfig.old
 apps/*/sdkconfig.*.old
